@@ -1,0 +1,12 @@
+[package]
+name = "doppel"
+version = "0.1.0"
+edition = "2024"
+description = "Industrial Digital Twin & Virtual Commissioning Framework"
+license = "Apache-2.0"
+repository = "https://github.com/besok/doppel"
+homepage = "https://github.com/besok/doppel"
+documentation = "https://docs.rs/doppel"
+keywords = ["digital-twin", "simulation", "IoT", "rust", "data-analytics"]
+categories = ["simulation", "data-structures", "network-programming"]
+readme = "README.md"
