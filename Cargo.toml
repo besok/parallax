@@ -10,3 +10,6 @@ documentation = "https://docs.rs/doppel"
 keywords = ["digital-twin", "simulation", "IoT", "rust", "data-analytics"]
 categories = ["simulation", "data-structures", "network-programming"]
 readme = "README.md"
+
+[dependencies]
+bevy = { version = "0.16.0", features = ["dynamic_linking"] }
