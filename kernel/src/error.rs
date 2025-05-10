@@ -26,6 +26,19 @@ impl From<ServerError> for KernelError {
     }
 }
 
+impl From<std::io::Error> for KernelError {
+    fn from(error: std::io::Error) -> Self {
+        KernelError::SystemError(error.to_string())
+    }
+}
+
+impl From<russh::Error> for KernelError {
+    fn from(error: russh::Error) -> Self {
+        let s: ServerError = error.into();
+        s.into()
+    }
+}
+
 pub struct ErrorHandler {
     receiver: Receiver<KernelError>,
     sender: Sender<KernelError>,
