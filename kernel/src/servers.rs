@@ -1,4 +1,5 @@
 mod http;
+mod ssh;
 
 use crate::error::KernelError;
 use crate::{Res, VoidRes};
@@ -14,6 +15,13 @@ pub enum ServerError {
     StopError(String, ServerId),
     ClientError(String),
 }
+
+impl From<russh::Error> for ServerError {
+    fn from(e: russh::Error) -> Self {
+        ServerError::ClientError(e.to_string())
+    }
+}
+
 pub struct ServerHandle<Mes> {
     sender: Sender<Mes>,
 }
@@ -60,11 +68,6 @@ where
                     }
                 }
                 else => break,
-            }
-        }
-        if let Err(e) = server.stop() {
-            if let Some(err_sender) = err_sender {
-                let _ = err_sender.send(e).await;
             }
         }
     });

@@ -1,5 +1,6 @@
 use crate::servers::ServerError;
 use std::net::AddrParseError;
+use std::sync::PoisonError;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -8,9 +9,16 @@ use tokio::sync::mpsc::{Receiver, Sender};
 pub enum KernelError {
     ServerError(ServerError),
     ChannelError(String),
+    SystemError(String),
 }
 
 unsafe impl Send for KernelError {}
+
+impl<T> From<PoisonError<T>> for KernelError {
+    fn from(error: PoisonError<T>) -> Self {
+        KernelError::SystemError(error.to_string())
+    }
+}
 
 impl From<ServerError> for KernelError {
     fn from(error: ServerError) -> Self {
