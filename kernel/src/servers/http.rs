@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod tests;
 
 use crate::VoidRes;
@@ -22,12 +23,7 @@ pub struct BaseHttpServer {
 
 impl Default for BaseHttpServer {
     fn default() -> Self {
-        BaseHttpServer::new(
-            "http_server".to_string(),
-            "127.0.0.1".to_string(),
-            8080,
-            None,
-        )
+        BaseHttpServer::new("http_server", "127.0.0.1", 8080, None)
     }
 }
 
@@ -39,10 +35,15 @@ pub fn default_router() -> Router {
 }
 
 impl BaseHttpServer {
-    pub fn new(id: String, host: String, port: u16, router: Option<Router>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        host: impl Into<String>,
+        port: u16,
+        router: Option<Router>,
+    ) -> Self {
         BaseHttpServer {
-            id,
-            host,
+            id: id.into(),
+            host: host.into(),
             port,
             router: router.unwrap_or_else(default_router),
             server_handle: None,

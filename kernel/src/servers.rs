@@ -1,8 +1,11 @@
-mod http;
-mod ssh;
+pub mod azure;
+pub mod http;
+pub mod opcua;
+pub mod ssh;
 
 use crate::error::KernelError;
 use crate::{Res, VoidRes};
+use std::sync::PoisonError;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task;
 
@@ -11,11 +14,14 @@ type ServerId = String;
 #[derive(Debug)]
 pub enum ServerError {
     StartError(String, ServerId),
-    RuntimeError(String, ServerId),
-    StopError(String, ServerId),
+    RuntimeError(String),
     ClientError(String),
 }
-
+impl<T> From<PoisonError<T>> for ServerError {
+    fn from(error: PoisonError<T>) -> Self {
+        ServerError::RuntimeError(error.to_string())
+    }
+}
 impl From<russh::Error> for ServerError {
     fn from(e: russh::Error) -> Self {
         ServerError::ClientError(e.to_string())
@@ -33,6 +39,15 @@ impl<Mes> ServerHandle<Mes> {
 
     pub async fn send(&self, message: Mes) -> VoidRes {
         Ok(self.sender.send(message).await?)
+    }
+
+    pub fn send_sync(&self, message: Mes) -> VoidRes {
+        let sender = self.sender.clone();
+        task::block_in_place(move || {
+            sender
+                .blocking_send(message)
+                .map_err(|e| KernelError::ChannelError(e.to_string()))
+        })
     }
 }
 

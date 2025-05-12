@@ -24,6 +24,9 @@ chrono = "0.4"
 russh = "0.40.2"
 russh-keys = "0.40.1"
 async-trait = "0.1.88"
+serde = { version = "1.0.219", features = ["derive"] }
+lapin = "2.3.4"
+uuid = "1.16.0"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

@@ -1,4 +1,5 @@
 pub mod handler;
+#[cfg(test)]
 mod tests;
 
 use crate::servers::ssh::handler::{BaseSshHandler, SshHandler, default_cmd_processors};
@@ -27,25 +28,20 @@ pub struct SshServer {
 
 impl Default for SshServer {
     fn default() -> Self {
-        SshServer::new(
-            "ssh_server".to_string(),
-            "127.0.0.1".to_string(),
-            2222,
-            None,
-        )
+        SshServer::new("ssh_server", "127.0.0.1", 2222, None)
     }
 }
 
 impl SshServer {
     pub fn new(
-        id: String,
-        host: String,
+        id: impl Into<String>,
+        host: impl Into<String>,
         port: u16,
         cmd_processors: Option<Vec<CmdProcessor>>,
     ) -> Self {
         SshServer {
-            id,
-            host,
+            id: id.into(),
+            host: host.into(),
             port,
             server_handle: None,
             files: Arc::new(Mutex::new(HashMap::new())),
