@@ -1,306 +1,330 @@
-mod amqp;
 #[cfg(test)]
 mod tests;
-
+use crate::VoidRes;
 use crate::error::KernelError;
-use crate::servers::azure::amqp::handle_amqp_connection;
-use crate::servers::http::{BaseHttpServer, HttpMessage};
-use crate::servers::{Server, ServerError, ServerHandle, ServerId, spawn_server};
-use crate::{Res, VoidRes};
-use axum::{
-    Router,
-    extract::{Json, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-};
-use lapin::{
-    BasicProperties, Connection, ConnectionProperties, Consumer,
-    message::DeliveryResult,
-    options::{BasicPublishOptions, QueueDeclareOptions},
-    types::FieldTable,
-};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use crate::servers::ssh::handler::SshHandler;
+use crate::servers::{Server, ServerError};
+use azure_messaging_servicebus::prelude::TopicClient;
+use azure_messaging_servicebus::service_bus::SendMessageOptions;
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio::task::spawn_local;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
 type Topic = String;
-type Queue = String;
 type Subscription = String;
-type QueuesState = Arc<Mutex<HashMap<String, Vec<ServiceBusMessage>>>>;
-type TopicsState = Arc<Mutex<HashMap<String, HashMap<String, Vec<ServiceBusMessage>>>>>;
-
-#[derive(Clone)]
-struct BusState {
-    queues: QueuesState,
-    topics: TopicsState,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServiceBusMessage {
-    pub message_id: Option<String>,
-    pub body: Vec<u8>,
-    pub properties: HashMap<String, String>,
-    pub content_type: Option<String>,
-    pub subject: Option<String>,
-}
 
 #[derive(Debug)]
-pub enum AzureServiceBusCommand {
-    Stop,
-    Start,
-    AddQueue(Queue),
-    AddTopic(Topic, Vec<Subscription>),
-    PublishMessage(Topic, ServiceBusMessage),
-    ClearQueues,
-    ClearTopics,
+pub struct AzureNativeTopicClient {
+    namespace: String,
+    policy: (String, String),
+    server_handle: Option<JoinHandle<()>>,
+    topic: Topic,
+    subscription: Subscription,
+    client: Option<TopicClient>,
 }
 
-impl BusState {
-    fn new() -> Self {
-        BusState {
-            queues: Arc::new(Mutex::new(HashMap::new())),
-            topics: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-// Mock Azure Service Bus server
-pub struct AzureServiceBusServer {
-    id: ServerId,
-    http_port: u16,
-    amqp_port: u16,
-    hostname: String,
-    state: BusState,
-    http_handle: Option<ServerHandle<HttpMessage>>,
-    amqp_handle: Option<tokio::task::JoinHandle<()>>,
-    shutdown_tx: Option<mpsc::Sender<()>>,
-}
-
-impl Default for AzureServiceBusServer {
+impl Default for AzureNativeTopicClient {
     fn default() -> Self {
-        Self::new("azure-service-bus-mock", "127.0.0.1", 5672, 5671)
-    }
-}
-
-impl AzureServiceBusServer {
-    pub fn new(
-        id: impl Into<String>,
-        hostname: impl Into<String>,
-        http_port: u16,
-        amqp_port: u16,
-    ) -> Self {
-        AzureServiceBusServer {
-            id: id.into(),
-            http_port,
-            amqp_port,
-            hostname: hostname.into(),
-            state: BusState::new(),
-            http_handle: None,
-            amqp_handle: None,
-            shutdown_tx: None,
-        }
-    }
-
-    pub fn connection_string(&self) -> String {
-        format!(
-            "Endpoint=sb://{}:{}/;SharedAccessKeyName=mock;SharedAccessKey=mock_key;SharedAccessKeyName=RootManageSharedAccessKey",
-            self.hostname, self.amqp_port
+        AzureNativeTopicClient::new(
+            "localhost",
+            ("RootManageSharedAccessKey", "SAS_KEY_VALUE"),
+            "test-topic",
+            "test-sub",
         )
     }
+}
 
-    fn add_queue(&mut self, queue_name: String) -> VoidRes {
-        let mut queues = self.state.queues.lock()?;
-        queues.entry(queue_name).or_insert_with(Vec::new);
-        Ok(())
-    }
-
-    fn add_topic(&mut self, topic_name: String, subscriptions: Vec<String>) -> VoidRes {
-        let mut topics = self.state.topics.lock()?;
-        let topic_map = topics.entry(topic_name).or_insert_with(HashMap::new);
-
-        for subscription in subscriptions {
-            topic_map.entry(subscription).or_insert_with(Vec::new);
+impl AzureNativeTopicClient {
+    pub fn new(
+        namespace: impl Into<String>,
+        policy: (impl Into<String>, impl Into<String>),
+        topic: impl Into<Topic>,
+        subscription: impl Into<Subscription>,
+    ) -> Self {
+        AzureNativeTopicClient {
+            server_handle: None,
+            namespace: namespace.into(),
+            policy: (policy.0.into(), policy.1.into()),
+            topic: topic.into(),
+            subscription: subscription.into(),
+            client: None,
         }
-        Ok(())
     }
 
-    fn clear_queues(&mut self) -> VoidRes {
-        let mut queues = self.state.queues.lock()?;
-        queues.clear();
-        Ok(())
+    pub fn id(&self) -> String {
+        format!("{}-{}", self.topic, self.subscription)
     }
+}
 
-    fn clear_topics(&mut self) -> VoidRes {
-        let mut topics = self.state.topics.lock()?;
-        topics.clear();
-        Ok(())
-    }
+impl Server<AzureMessage> for AzureNativeTopicClient {
+    fn start(&mut self) -> VoidRes {
+        log::info!("Starting Azure Client  {} ", self.id());
+        let namespace = self.namespace.clone();
+        let sub = self.subscription.clone();
+        let (name, key) = self.policy.clone();
+        let topic = self.topic.clone();
 
-    fn start_amqp_server(&mut self, mut shutdown_rx: mpsc::Receiver<()>) -> VoidRes {
-        let state = self.state.clone();
-        let host = self.hostname.clone();
-        let port = self.amqp_port;
-        let id = self.id.clone();
-        let addr = format!("amqp://guest:guest@{}:{}", host, self.amqp_port);
+        let request_client = ::reqwest::ClientBuilder::new()
+            .pool_max_idle_per_host(0)
+            .build()
+            .map_err(|e| {
+                KernelError::ServerError(ServerError::StartError(e.to_string(), self.id()))
+            })?;
 
-        log::info!("Starting AMQP server on {}", addr);
+        self.client = Some(
+            TopicClient::new(Arc::new(request_client), namespace, topic, name, key).map_err(
+                |e| KernelError::ServerError(ServerError::StartError(e.to_string(), self.id())),
+            )?,
+        );
+        let client = self.client.clone().unwrap();
 
-        self.amqp_handle = Some(tokio::spawn(async move {
-            let listener = match tokio::net::TcpListener::bind(format!("{}:{}", host, port)).await {
-                Ok(l) => l,
-                Err(e) => {
-                    log::error!("Failed to bind AMQP server: {:?}", e);
-                    return;
-                }
-            };
-
-            log::info!("AMQP server listening on {}:{}", host, port);
-
+        self.server_handle = Some(tokio::spawn(async move {
+            let sub_receiver = client.subscription_receiver(sub.as_str());
             loop {
-                tokio::select! {
-                    _ = shutdown_rx.recv() => {
-                        log::info!("Shutdown signal received, stopping AMQP server");
-                        return ;
+                match sub_receiver.receive_and_delete_message().await {
+                    Ok(message) => {
+                        log::info!("Received message: {}", message);
                     }
-                    // Handle incoming connections
-                    conn_result = listener.accept() => {
-                        match conn_result {
-                            Ok((stream, addr)) => {
-                                log::info!("New AMQP connection from: {}", addr);
-
-                                let state_clone = state.clone();
-
-                                spawn_local(async move {
-                                    if let Err(e) = handle_amqp_connection(stream, state_clone).await {
-                                        log::error!("Error handling AMQP connection: {:?}", e);
-                                    }
-                                });
-                            }
-                            Err(e) => {
-                                log::error!("Error accepting AMQP connection: {}", e);
-                                 sleep(Duration::from_millis(100)).await;
-                            }
-                        }
+                    Err(e) => {
+                        log::error!("Error receiving message: {:?}", e);
+                        sleep(Duration::from_millis(500)).await;
                     }
                 }
             }
         }));
         Ok(())
     }
+
+    fn stop(&mut self) -> VoidRes {
+        if let Some(handle) = self.server_handle.take() {
+            handle.abort();
+            log::info!("Azure Client stopped");
+        }
+        Ok(())
+    }
+
+    fn process(&mut self, message: AzureMessage) -> VoidRes {
+        match message {
+            AzureMessage::Start => {
+                log::info!("Azure Client started");
+                self.start()
+            }
+            AzureMessage::Stop => {
+                log::info!("Azure Client stopped");
+                self.stop()
+            }
+            AzureMessage::SendMessage(msg, opts) => {
+                log::info!("Sending message: {}", msg);
+                if let Some(client) = self.client.as_ref() {
+                    let sender = client.topic_sender();
+                    tokio::spawn(async move {
+                        match sender.send_message(msg.as_str(), opts).await {
+                            Ok(_) => log::info!("Message sent successfully"),
+                            Err(e) => log::error!("Error sending message: {:?}", e),
+                        }
+                    });
+                } else {
+                    log::error!("Client not initialized");
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
-// HTTP server route handlers
-async fn health() -> impl IntoResponse {
-    Json(serde_json::json!({
-        "status": "up",
-        "version": env!("CARGO_PKG_VERSION"),
-    }))
+pub struct PythonServiceBusClient {
+    conn_str: String,
+    topic: String,
+    subscription: String,
+    server_handle: Option<JoinHandle<()>>,
 }
 
-async fn authorize() -> impl IntoResponse {
-    Json(serde_json::json!({
-        "token_type": "Bearer",
-        "expires_in": 3600,
-        "access_token": "mock_access_token_for_azure_service_bus"
-    }))
-}
-
-async fn get_connection_string(State(state): State<BusState>) -> impl IntoResponse {
-    Json(serde_json::json!({
-        "connection_string": format!(
-            "Endpoint=sb://localhost:5671/;SharedAccessKeyName=mock;SharedAccessKey=mock_key;SharedAccessKeyName=RootManageSharedAccessKey"
+impl Default for PythonServiceBusClient {
+    fn default() -> Self {
+        PythonServiceBusClient::new(
+            "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
+            "test-topic",
+            "test-sub",
         )
-    }))
+    }
 }
 
-impl Server<AzureServiceBusCommand> for AzureServiceBusServer {
-    fn start(&mut self) -> VoidRes {
-        let app_state = self.state.clone();
+impl PythonServiceBusClient {
+    pub fn new(
+        conn_str: impl Into<String>,
+        topic: impl Into<String>,
+        subscription: impl Into<String>,
+    ) -> Self {
+        Self {
+            conn_str: conn_str.into(),
+            topic: topic.into(),
+            subscription: subscription.into(),
+            server_handle: None,
+        }
+    }
 
-        let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>(1);
+    pub fn start(&mut self) -> VoidRes {
+        let conn_str = self.conn_str.clone();
+        let topic_name = self.topic.clone();
+        let subscription_name = self.subscription.clone();
 
-        self.shutdown_tx = Some(shutdown_tx.clone());
+        self.server_handle = Some(tokio::spawn(async move {
+            loop {
+                let conn_str = conn_str.clone();
+                let topic_name = topic_name.clone();
+                let subscription_name = subscription_name.clone();
+                // Run in a separate thread since Python GIL can block
+                let result = std::thread::spawn(move || {
+                    Python::with_gil(|py| {
+                        // Import required modules
+                        // let azure_sb = py.import("azure.servicebus")?;
+                        // let service_bus_client = azure_sb.getattr("ServiceBusClient")?;
+                        //
+                        // // Create client from connection string
+                        // let client = service_bus_client
+                        //     .call_method1("from_connection_string", (conn_str.clone(),))?;
+                        // let dict = PyDict::new(py);
+                        // dict.set_item("topic_name", topic_name.clone())?;
+                        // dict.set_item("subscription_name", subscription_name.clone())?;
+                        // dict.set_item("max_wait_time", 5)?;
+                        //
+                        // let receiver = client.call_method(
+                        //     "get_subscription_receiver",
+                        //     PyTuple::empty(py),
+                        //     Some(&dict),
+                        // )?;
+                        //
+                        // let dict = PyDict::new(py);
+                        // dict.set_item("max_message_count", 10)?;
+                        // dict.set_item("max_wait_time", 30)?;
+                        // loop {
+                        //     // Receive messages
+                        //     let messages = receiver.call_method(
+                        //         "receive_messages",
+                        //         PyTuple::empty(py),
+                        //         Some(&dict),
+                        //     )?;
+                        //
+                        //     // Process messages
+                        //     let message_count = messages.len()?;
+                        //     if message_count == 0 {
+                        //         // No messages received, briefly release GIL to allow other Python code to run
+                        //         py.allow_threads(|| {
+                        //             std::thread::sleep(std::time::Duration::from_millis(100));
+                        //         });
+                        //         continue;
+                        //     }
+                        //
+                        //     for message in messages.iter()? {
+                        //         let msg = message?;
+                        //         let body = msg.getattr("body")?.extract::<Vec<u8>>()?;
+                        //         let body_str = String::from_utf8_lossy(&body);
+                        //
+                        //         println!("Received message: {}", body_str);
+                        //
+                        //         // Complete the message to remove it from the queue
+                        //         receiver.call_method1("complete_message", (msg,))?;
+                        //     }
+                        // }
 
-        let app = Router::new()
-            .route("/health", get(health))
-            .route("/token", post(authorize))
-            .route("/.well-known/oauth-authorization-server", get(authorize))
-            .route("/connection-string", get(get_connection_string))
-            .with_state(app_state.clone());
+                        // Close the client
+                        // client.call_method0("close")?;
+                        //
+                        Ok::<(), PyErr>(())
+                    })
+                })
+                .join()
+                .unwrap();
 
-        let http_handle = spawn_server(
-            BaseHttpServer::new(
-                format!("{}-Http-base-server", self.id),
-                &self.hostname,
-                self.http_port,
-                Some(app),
-            ),
-            None,
-        )?;
+                if let Err(e) = result {
+                    log::error!("Python error: {}", e);
+                }
 
-        self.http_handle = Some(http_handle);
-        self.start_amqp_server(shutdown_rx)?;
-
-        log::info!(
-            "Azure Service Bus mock server started with AMQP on port {} and HTTP on port {}",
-            self.amqp_port,
-            self.http_port
-        );
+                // Add a brief pause to avoid excessive CPU usage
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+        }));
 
         Ok(())
+    }
+
+    pub fn send_message(&self, message: &str) -> VoidRes {
+        let conn_str = self.conn_str.clone();
+        let topic_name = self.topic.clone();
+        let message = message.to_string();
+
+        // Send message in a separate thread to avoid blocking
+        std::thread::spawn(move || {
+            Python::with_gil(|py| -> PyResult<()> {
+                // Import required modules
+                let azure_sb = py.import("azure.servicebus")?;
+                let service_bus_client = azure_sb.getattr("ServiceBusClient")?;
+                let service_bus_message = azure_sb.getattr("ServiceBusMessage")?;
+
+                // Create client from connection string
+                let client =
+                    service_bus_client.call_method1("from_connection_string", (conn_str,))?;
+
+                // Get a topic sender
+                let sender = client.call_method1("get_topic_sender", (topic_name,))?;
+
+                // Create and send a message
+                let msg = service_bus_message.call1((message,))?;
+                sender.call_method1("send_messages", (msg,))?;
+
+                // Close the client
+                client.call_method0("close")?;
+
+                Ok(())
+            })
+        });
+
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> VoidRes {
+        if let Some(handle) = self.server_handle.take() {
+            handle.abort();
+            log::info!("Python Service Bus client stopped");
+        }
+        Ok(())
+    }
+}
+
+impl Server<AzureMessage> for PythonServiceBusClient {
+    fn start(&mut self) -> VoidRes {
+        log::info!("Starting Python Service Bus Client");
+        self.start()
     }
 
     fn stop(&mut self) -> VoidRes {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.try_send(());
-            log::info!("Shutdown signal sent to Azure Service Bus mock server");
-        }
-
-        if let Some(h) = &self.http_handle {
-            h.send_sync(HttpMessage::Stop)?;
-        }
-
-        if let Some(handle) = self.amqp_handle.take() {
-            handle.abort();
-        }
-
-        Ok(())
+        log::info!("Stopping Python Service Bus Client");
+        self.stop()
     }
 
-    fn process(&mut self, message: AzureServiceBusCommand) -> VoidRes {
+    fn process(&mut self, message: AzureMessage) -> VoidRes {
         match message {
-            AzureServiceBusCommand::Stop => self.stop()?,
-
-            AzureServiceBusCommand::AddQueue(queue_name) => {
-                self.add_queue(queue_name)?;
+            AzureMessage::Start => {
+                log::info!("Python Service Bus Client started");
+                self.start()
             }
-            AzureServiceBusCommand::AddTopic(topic_name, subscriptions) => {
-                self.add_topic(topic_name, subscriptions)?;
+            AzureMessage::Stop => {
+                log::info!("Python Service Bus Client stopped");
+                self.stop()
             }
-            AzureServiceBusCommand::ClearQueues => {
-                self.clear_queues()?;
-            }
-            AzureServiceBusCommand::ClearTopics => {
-                self.clear_topics()?;
-            }
-            AzureServiceBusCommand::Start => {
-                self.start()?;
-            }
-            AzureServiceBusCommand::PublishMessage(topic_name, message) => {
-                let mut topics = self.state.topics.lock()?;
-                if let Some(subscriptions) = topics.get_mut(&topic_name) {
-                    for subscription in subscriptions.values_mut() {
-                        subscription.push(message.clone());
-                    }
-                }
+            AzureMessage::SendMessage(msg, _) => {
+                log::info!("Sending message: {}", msg);
+                self.send_message(&msg)
             }
         }
-        Ok(())
     }
+}
+
+pub enum AzureMessage {
+    Start,
+    Stop,
+    SendMessage(String, Option<SendMessageOptions>),
 }
