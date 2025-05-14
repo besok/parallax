@@ -23,11 +23,12 @@ reqwest = { version = "0.12.15", features = ["json"] }
 chrono = "0.4"
 russh = "0.40.2"
 russh-keys = "0.40.1"
+hyper = "0.14"
 async-trait = "0.1.88"
-pyo3 = { version = "0.24.0", features = ["auto-initialize"] }
 
 azure_messaging_servicebus = "0.21.0"
-azure_core = "0.24.0"
+base64 = "0.22.0"
+
 
 
 # Enable a small amount of optimization in the dev profile.

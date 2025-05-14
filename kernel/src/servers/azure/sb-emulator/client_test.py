@@ -5,7 +5,7 @@ import ssl
 import time
 
 # Enable detailed logging
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 conn_str = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;"
 
@@ -17,13 +17,13 @@ try:
     with ServiceBusClient.from_connection_string(
             conn_str
     ) as client:
-        # First send a message to the topic
-        print("Attempting to connect and send a message...")
-        topic_sender = client.get_topic_sender(topic_name)
-
-        topic_message = ServiceBusMessage("Test message content")
-        topic_sender.send_messages(topic_message)
-        print("Message sent successfully!")
+        # # First send a message to the topic
+        # print("Attempting to connect and send a message...")
+        # topic_sender = client.get_topic_sender(topic_name)
+        #
+        # topic_message = ServiceBusMessage("Test message content")
+        # topic_sender.send_messages(topic_message)
+        # print("Message sent successfully!")
 
         # Then try to receive messages
         print(f"Creating receiver for {topic_name}/{subscription_name}...")
@@ -41,7 +41,9 @@ try:
 
         for msg in received_msgs:
             print(f"Received: {msg}")
-            print(f"Body: {str(msg.body.decode())}")
+            body_content = b''.join(chunk for chunk in msg.body)
+            body_str = body_content.decode('utf-8') if isinstance(body_content, bytes) else str(body_content)
+            print(f"Body: {str(body_str)}")
             receiver.complete_message(msg)
 
 except Exception as e:
