@@ -12,6 +12,18 @@ pub enum KernelError {
     SystemError(String),
 }
 
+impl From<()> for KernelError {
+    fn from(_: ()) -> Self {
+        KernelError::ServerError(ServerError::ClientError("Empty error".to_string()))
+    }
+}
+
+impl KernelError {
+    pub fn client(v: &str) -> Self {
+        KernelError::ServerError(ServerError::ClientError(v.to_string()))
+    }
+}
+
 unsafe impl Send for KernelError {}
 
 impl<T> From<PoisonError<T>> for KernelError {
