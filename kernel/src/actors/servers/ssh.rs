@@ -2,8 +2,9 @@ pub mod handler;
 #[cfg(test)]
 mod tests;
 
-use crate::servers::ssh::handler::{BaseSshHandler, SshHandler, default_cmd_processors};
-use crate::servers::{Server, ServerError};
+use crate::actors::Actor;
+use crate::actors::servers::ServerError;
+use crate::actors::servers::ssh::handler::{BaseSshHandler, SshHandler, default_cmd_processors};
 use crate::{Res, VoidRes};
 use russh::server::{Config, Handler};
 use russh_keys::key::KeyPair;
@@ -55,7 +56,7 @@ impl SshServer {
     }
 }
 
-impl Server<SshMessage> for SshServer {
+impl Actor<SshMessage> for SshServer {
     fn start(&mut self) -> VoidRes {
         let mut config = Config::default();
         config.keys.push(KeyPair::generate_ed25519().unwrap());

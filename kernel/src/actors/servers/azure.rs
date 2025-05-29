@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests;
 use crate::VoidRes;
+use crate::actors::servers::ServerError;
+use crate::actors::servers::ssh::handler::SshHandler;
 use crate::error::KernelError;
-use crate::servers::ssh::handler::SshHandler;
-use crate::servers::{Server, ServerError};
 use azure_messaging_servicebus::prelude::TopicClient;
 use azure_messaging_servicebus::service_bus::SendMessageOptions;
 use base64::{Engine as _, engine::general_purpose};
@@ -58,7 +58,7 @@ impl AzureTopicClient {
     }
 }
 
-impl Server<AzureMessage> for AzureTopicClient {
+impl Actor<AzureMessage> for AzureTopicClient {
     fn start(&mut self) -> VoidRes {
         log::info!(
             "Starting Azure Client  {}  - for now it is empty",
@@ -135,6 +135,7 @@ impl Server<AzureMessage> for AzureTopicClient {
     }
 }
 
+use crate::actors::Actor;
 use std::process::Command;
 
 fn send_azure_message(topic: &str, message: &[u8]) -> Result<(), std::io::Error> {

@@ -3,8 +3,9 @@ mod macros;
 #[cfg(test)]
 mod tests;
 
-use crate::servers::opcua::data::ServerStructure;
-use crate::servers::{Server, ServerError};
+use crate::actors::Actor;
+use crate::actors::servers::ServerError;
+use crate::actors::servers::opcua::data::ServerStructure;
 use crate::{Res, VoidRes};
 use opcua::crypto::SecurityPolicy;
 use opcua::server::builder::ServerBuilder;
@@ -85,7 +86,7 @@ fn try_to_build_server(id: &str, host: &str, port: usize) -> Res<InnerServer> {
         .server()
         .ok_or(ServerError::StartError("Failed to create server".into(), id.to_string()).into())
 }
-impl Server<OpcuaMessage> for OpcuaServer {
+impl Actor<OpcuaMessage> for OpcuaServer {
     fn start(&mut self) -> VoidRes {
         log::info!(
             "Starting OPC UA server {} on {}:{}",

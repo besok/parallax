@@ -1,40 +1,19 @@
-pub mod azure;
-pub mod http;
-pub mod opcua;
-pub mod ssh;
-
 use crate::error::KernelError;
 use crate::{Res, VoidRes};
-use std::sync::PoisonError;
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tokio::task;
 
-type ServerId = String;
+pub mod servers;
+mod workers;
 
-#[derive(Debug)]
-pub enum ServerError {
-    StartError(String, ServerId),
-    RuntimeError(String),
-    ClientError(String),
-}
-impl<T> From<PoisonError<T>> for ServerError {
-    fn from(error: PoisonError<T>) -> Self {
-        ServerError::RuntimeError(error.to_string())
-    }
-}
-impl From<russh::Error> for ServerError {
-    fn from(e: russh::Error) -> Self {
-        ServerError::ClientError(e.to_string())
-    }
-}
-
-pub struct ServerHandle<Mes> {
+pub struct ActorHandle<Mes> {
     sender: Sender<Mes>,
 }
 
-impl<Mes> ServerHandle<Mes> {
+impl<Mes> ActorHandle<Mes> {
     pub fn new(sender: Sender<Mes>) -> Self {
-        ServerHandle { sender }
+        ActorHandle { sender }
     }
 
     pub async fn send(&self, message: Mes) -> VoidRes {
@@ -51,22 +30,22 @@ impl<Mes> ServerHandle<Mes> {
     }
 }
 
-pub trait Server<Mes> {
+pub trait Actor<Mes> {
     fn start(&mut self) -> VoidRes;
     fn stop(&mut self) -> VoidRes;
     fn process(&mut self, message: Mes) -> VoidRes;
 }
 
-pub fn spawn_server<M, Serv>(
+pub fn spawn_actor<M, Serv>(
     mut server: Serv,
     err_sender: Option<Sender<KernelError>>,
-) -> Res<ServerHandle<M>>
+) -> Res<ActorHandle<M>>
 where
-    Serv: Server<M> + Send + 'static,
+    Serv: Actor<M> + Send + 'static,
     M: Send + 'static,
 {
     let (sender, mut receiver) = mpsc::channel::<M>(32);
-    task::spawn(async move {
+    tokio::spawn(async move {
         if let Err(e) = server.start() {
             if let Some(err_sender) = err_sender {
                 let _ = err_sender.send(e).await;
@@ -87,12 +66,13 @@ where
         }
     });
 
-    Ok(ServerHandle::new(sender))
+    Ok(ActorHandle::new(sender))
 }
 
 mod tests {
-    use crate::servers::http::{BaseHttpServer, HttpMessage};
-    use crate::servers::{ServerError, spawn_server};
+    use crate::actors::servers::ServerError;
+    use crate::actors::servers::http::{BaseHttpServer, HttpMessage};
+    use crate::actors::spawn_actor;
     use crate::{VoidRes, init_logger};
     use serde_json::Value;
     use std::time::Duration;
@@ -102,7 +82,7 @@ mod tests {
     async fn test_http_server() -> VoidRes {
         init_logger();
 
-        let server_handle = spawn_server(BaseHttpServer::default(), None)?;
+        let server_handle = spawn_actor(BaseHttpServer::default(), None)?;
 
         let client = reqwest::Client::new();
         let response = client

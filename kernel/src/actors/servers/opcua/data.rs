@@ -1,5 +1,5 @@
+use crate::actors::servers::ServerError;
 use crate::error::KernelError;
-use crate::servers::ServerError;
 use crate::{Res, VoidRes};
 use opcua::server::address_space::AddressSpace;
 use opcua::server::prelude::{

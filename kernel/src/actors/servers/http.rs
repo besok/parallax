@@ -2,7 +2,8 @@
 mod tests;
 
 use crate::VoidRes;
-use crate::servers::{Server, ServerError};
+use crate::actors::Actor;
+use crate::actors::servers::ServerError;
 use axum::routing::get;
 use axum::{Json, Router};
 use std::net::SocketAddr;
@@ -56,7 +57,7 @@ impl BaseHttpServer {
     }
 }
 
-impl Server<HttpMessage> for BaseHttpServer {
+impl Actor<HttpMessage> for BaseHttpServer {
     fn start(&mut self) -> VoidRes {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         let addr = format!("{}:{}", self.host, self.port)

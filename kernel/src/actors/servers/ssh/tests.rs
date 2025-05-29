@@ -1,5 +1,5 @@
-use crate::servers::spawn_server;
-use crate::servers::ssh::{SshMessage, SshServer};
+use crate::actors::servers::ssh::{SshMessage, SshServer};
+use crate::actors::spawn_actor;
 use crate::{Res, VoidRes, init_logger};
 use russh::{ChannelMsg, client};
 use russh_keys::key::PublicKey;
@@ -63,7 +63,7 @@ impl client::Handler for TestSshClient {
 #[tokio::test]
 async fn smoke_ssh() -> VoidRes {
     init_logger();
-    let server_handle = spawn_server(SshServer::default(), None)?;
+    let server_handle = spawn_actor(SshServer::default(), None)?;
     sleep(Duration::from_millis(100)).await;
 
     let client = TestSshClient;

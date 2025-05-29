@@ -1,6 +1,8 @@
-pub mod elements;
+use bevy::prelude::Component;
+
+pub mod actors;
 pub mod error;
-pub mod servers;
+pub mod vis2d;
 
 pub fn init_logger() {
     use chrono::Local;

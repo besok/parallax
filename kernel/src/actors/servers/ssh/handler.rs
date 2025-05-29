@@ -1,8 +1,8 @@
-use crate::servers::ssh::{CmdProcessor, OsFiles};
+use crate::actors::servers::ssh::{CmdProcessor, OsFiles};
 use crate::{Res, VoidRes};
 use std::io;
 
-use crate::servers::ServerError;
+use crate::actors::servers::ServerError;
 use async_trait::async_trait;
 use russh::server::{Auth, Msg, Session};
 use russh::{Channel, ChannelId, server};
