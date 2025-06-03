@@ -93,7 +93,7 @@ impl Actor<HttpMessage> for BaseHttpServer {
 
             if let Some(handle) = self.server_handle.take() {
                 tokio::spawn(async move {
-                    match tokio::time::timeout(Duration::from_secs(10), handle).await {
+                    match tokio::time::timeout(Duration::from_secs(60), handle).await {
                         Ok(_) => log::info!("HTTP server shut down successfully"),
                         Err(_) => log::warn!("HTTP server shutdown timed out"),
                     }

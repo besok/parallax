@@ -12,6 +12,12 @@ pub enum KernelError {
     SystemError(String),
 }
 
+impl From<azure_core::Error> for KernelError {
+    fn from(error: azure_core::Error) -> Self {
+        KernelError::ServerError(ServerError::RuntimeError(error.to_string()))
+    }
+}
+
 impl From<()> for KernelError {
     fn from(_: ()) -> Self {
         KernelError::ServerError(ServerError::ClientError("Empty error".to_string()))
