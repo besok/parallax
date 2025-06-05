@@ -8,14 +8,13 @@ parser = argparse.ArgumentParser(description='Send a message to Azure Service Bu
 parser.add_argument('--topic', type=str, required=True, help='Topic name')
 parser.add_argument('--message', type=str, help='Message content as string')
 parser.add_argument('--base64', type=str, help='Message content as base64 encoded string')
+parser.add_argument('--conn', type=str, help='Connction string to Azure Service Bus',
+                    default="Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;")
 args = parser.parse_args()
 
 if not args.message and not args.base64:
     print("Error: Either --message or --base64 must be provided")
     sys.exit(1)
-
-# Connection string
-conn_str = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;"
 
 try:
     # Create a message either from plain text or base64-encoded bytes
@@ -26,7 +25,7 @@ try:
         message_content = base64.b64decode(args.base64)
 
     # Create a client
-    with ServiceBusClient.from_connection_string(conn_str) as client:
+    with ServiceBusClient.from_connection_string(args.conn) as client:
         # Send the message to the specified topic
         print(f"Connecting to send message to topic '{args.topic}'...")
         topic_sender = client.get_topic_sender(args.topic)

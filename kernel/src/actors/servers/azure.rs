@@ -1,33 +1,36 @@
 #[cfg(test)]
 mod tests;
+
 use crate::VoidRes;
 use crate::actors::servers::ServerError;
 use crate::error::KernelError;
 use base64::{Engine as _, engine::general_purpose};
+use std::io;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::task::JoinHandle;
-
 type Topic = String;
 type Subscription = String;
+use azure_messaging_servicebus::prelude::*;
 
-#[derive(Debug)]
 pub struct AzureTopicListener<H: ServiceBusMsgHandler = EchoServiceBusMsgHandler> {
     conn: String,
     topic: Topic,
     subscription: Subscription,
-    server_handle: Option<JoinHandle<()>>,
-    shutdown_tx: Option<Sender<()>>,
+    port: u16,
     handler: H,
+    http_handle: Option<ActorHandle<HttpMessage>>,
+    py_handle: Option<JoinHandle<Result<(), io::Error>>>,
 }
 
 pub trait ServiceBusMsgHandler {
-    fn process(&mut self, message: &ServiceBusReceivedMessage) -> VoidRes;
+    fn process(&mut self, message: &str) -> VoidRes;
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct EchoServiceBusMsgHandler;
 
 impl ServiceBusMsgHandler for EchoServiceBusMsgHandler {
-    fn process(&mut self, message: &ServiceBusReceivedMessage) -> VoidRes {
+    fn process(&mut self, message: &str) -> VoidRes {
         log::info!("Echoing message: {:?}", message);
         Ok(())
     }
@@ -39,20 +42,22 @@ impl<H: ServiceBusMsgHandler + Default> Default for AzureTopicListener<H> {
             "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
             "test-topic",
             "test-sub",
+            10000,
             H::default(),
         )
     }
 }
 
 impl<H: ServiceBusMsgHandler> AzureTopicListener<H> {
-    pub fn new(conn: &str, topic: &str, subscription: &str, handler: H) -> Self {
+    pub fn new(conn: &str, topic: &str, subscription: &str, port: u16, handler: H) -> Self {
         AzureTopicListener {
             conn: conn.to_string(),
             topic: topic.to_string(),
             subscription: subscription.to_string(),
-            server_handle: None,
-            shutdown_tx: None,
+            port,
             handler,
+            http_handle: None,
+            py_handle: None,
         }
     }
     pub fn id(&self) -> String {
@@ -70,90 +75,48 @@ where
         let conn = self.conn.clone();
         let topic = self.topic.clone();
         let subscription = self.subscription.clone();
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
-        self.shutdown_tx = Some(shutdown_tx);
-        let mut h = self.handler.clone();
-        self.server_handle = Some(tokio::spawn(async move {
-            log::info!("Connecting to Azure Service Bus at {}", conn);
-            if let Err(e) = async {
-                let mut client = ServiceBusClient::new_from_connection_string(
-                    &conn,
-                    ServiceBusClientOptions::default(),
-                )
-                    .await?;
-                let mut receiver = client
-                    .create_receiver_for_subscription(
-                        &topic,
-                        &subscription,
-                        ServiceBusReceiverOptions::default(),
-                    )
-                    .await?;
-                log::info!(
-                    "Receiver created for topic: {}, subscription: {}",
-                    topic,
-                    subscription
-                );
-
-                loop {
-                    tokio::select! {
-                        _ = shutdown_rx.recv() => {
-                            log::info!("Shutdown signal received, stopping Azure client");
-                            break;
-                        }
-
-                        message_result = receiver.receive_message_with_max_wait_time(Some(Duration::from_millis(200))) => {
-                            match message_result {
-                                Ok(Some(msg)) => {
-                                    log::info!("Received message: {:?}", msg);
-                                    if let Err(e) = h.process(&msg){
-                                        log::error!("Error processing message: {:?}", e);
-                                        
-                                    }
-                                    if let Err(e) = receiver.complete_message(&msg).await {
-                                        log::error!("Failed to complete message: {}", e);
-                                    }
-                                }
-                                Ok(None) => {
-                                    log::debug!("No message received, continuing to wait");
-                                }
-                                Err(e) => {
-                                    log::error!("Error receiving message: {:?}", e);
-                                    tokio::time::sleep(Duration::from_secs(1)).await;
-                                }
-
-                            }
-                        }
+        let handler = self.handler.clone();
+        let http_server = BaseHttpServer::new(
+            self.id(),
+            "0.0.0.0",
+            self.port,
+            Some(Router::new().route(
+                "/ret",
+                post(|body: axum::body::Bytes| async move {
+                    log::info!("Received message: {:?}", String::from_utf8_lossy(&body));
+                    if let Err(err) = handler.clone().process(&String::from_utf8_lossy(&body)) {
+                        log::error!("Error processing message: {:?}", err);
+                        return axum::http::StatusCode::INTERNAL_SERVER_ERROR;
                     }
-                }
 
-                receiver.dispose().await?;
-                client.dispose().await?;
+                    axum::http::StatusCode::OK
+                }),
+            )),
+        );
 
-                Ok::<(), KernelError>(())
-            }
-                .await
-            {
-                log::error!("Error connecting to Azure Service Bus {e:?}")
-            };
-        }));
+        self.http_handle = Some(spawn_actor(http_server, None)?);
+
+        self.py_handle = Some(start_py_server(
+            conn,
+            subscription,
+            topic.clone(),
+            format!("http://localhost:{}/ret", self.port),
+        ));
 
         Ok(())
     }
 
     fn stop(&mut self) -> VoidRes {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.try_send(());
-
-            if let Some(handle) = self.server_handle.take() {
-                tokio::spawn(async move {
-                    match tokio::time::timeout(Duration::from_secs(60), handle).await {
-                        Ok(_) => log::info!("Azure Topic Listener shut down successfully"),
-                        Err(_) => log::warn!("Azure Topic Listener shutdown timed out"),
-                    }
-                });
+        log::info!("Stopping Azure Client {}", self.id());
+        if let Some(h) = self.http_handle.take() {
+            if let Some(py_handle) = self.py_handle.take() {
+                log::info!("Stopping Python process for Azure Client {}", self.id());
+                py_handle.abort();
             }
+            h.send_sync(HttpMessage::Stop)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn process(&mut self, message: AzureMessage) -> VoidRes {
@@ -182,24 +145,85 @@ where
     }
 }
 
-use crate::actors::Actor;
-use azservicebus::core::BasicRetryPolicy;
-use azservicebus::{
-    ServiceBusClient, ServiceBusClientOptions, ServiceBusReceivedMessage, ServiceBusReceiverOptions,
-};
+use crate::actors::{Actor, ActorHandle, spawn_actor};
+
+use crate::actors::servers::http::{BaseHttpServer, HttpMessage};
+use axum::Router;
+use axum::routing::post;
 use std::process::Command;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::task;
 
+fn start_py_server(
+    conn: String,
+    sub: String,
+    topic: String,
+    ret_url: String,
+) -> JoinHandle<Result<(), std::io::Error>> {
+    let handle = tokio::spawn(async move {
+        let mut child = tokio::process::Command::new("python")
+            .arg("src/actors/servers/azure/sb-emulator/client_test.py")
+            .arg("--topic")
+            .arg(topic)
+            .arg("--sub")
+            .arg(sub)
+            .arg("--conn")
+            .arg(conn)
+            .arg("--ret")
+            .arg(ret_url)
+            .env("PYTHONUNBUFFERED", "1")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| {
+                log::error!("Failed to start Python script: {}", e);
+                e
+            })?;
+
+        // Create tasks to handle stdout and stderr
+        let stdout = child.stdout.take().unwrap();
+        let stderr = child.stderr.take().unwrap();
+
+        // Spawn task to handle stdout
+        let stdout_task = tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                log::info!("Python stdout: {}", line);
+            }
+        });
+
+        // Spawn task to handle stderr
+        let stderr_task = tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                log::error!("Python stderr: {}", line);
+            }
+        });
+
+        // Wait for the process to complete
+        if let Err(e) = child.wait().await {
+            log::error!("Error waiting for Python process: {}", e);
+        }
+
+        // Abort stream handling tasks when the process is done
+        stdout_task.abort();
+        stderr_task.abort();
+
+        Ok::<_, std::io::Error>(())
+    });
+
+    handle
+}
 fn send_azure_message(topic: &str, message: &[u8]) -> Result<(), std::io::Error> {
     // Convert binary message to base64
 
     let b64 = general_purpose::STANDARD.encode(message);
 
     let status = Command::new("python")
-        .arg("src/servers/azure/sb-emulator/send_message.py")
+        .arg("src/actors/servers/azure/sb-emulator/send_message.py")
         .arg("--topic")
         .arg(topic)
         .arg("--base64")

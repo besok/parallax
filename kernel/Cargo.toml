@@ -27,9 +27,8 @@ hyper = "0.14"
 async-trait = "0.1.88"
 opcua = "0.12.0"
 
-#azure_messaging_servicebus = "0.21.0"
-azservicebus = "0.20.4"
-azure_core = "0.20.0"
+azure_messaging_servicebus = "0.21.0"
+azure_core = "0.21.0"
 base64 = "0.22.0"
 
 

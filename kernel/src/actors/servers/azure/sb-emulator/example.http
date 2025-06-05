@@ -1,0 +1,5 @@
+### GET request to example server
+POST http://localhost:10000/ret
+Content-Type: application/octet-stream
+
+"abc"

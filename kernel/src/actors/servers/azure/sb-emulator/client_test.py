@@ -1,53 +1,89 @@
-from azure.servicebus import ServiceBusClient, ServiceBusMessage, TransportType
+import argparse
+import signal
+import requests
+from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
-import logging
-import ssl
-import time
+# Set up argument parsing
+parser = argparse.ArgumentParser(description='Receive messages from Azure Service Bus topic')
+parser.add_argument('--topic', type=str, required=True, help='Topic name')
+parser.add_argument('--sub', type=str, required=True, help='Subscription')
+parser.add_argument('--conn', type=str, help='Connection string to Azure Service Bus',
+                    default="Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;")
+parser.add_argument('--ret', type=str, required=True, help='HTTP endpoint to forward received messages to')
+args = parser.parse_args()
 
-# Enable detailed logging
-# logging.basicConfig(level=logging.DEBUG)
+# Set up graceful shutdown
+running = True
 
-conn_str = "Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;"
+print(f"Starting continuous receiver for {args.topic}/{args.sub}")
+print(f"Forwarding messages to: {args.ret}")
 
-topic_name = "test-topic"
-subscription_name = "test-sub"  # Your subscription name
 
+def forward_to_api(message_bytes):
+    try:
+        url = args.ret
+
+        headers = {
+            'Content-Type': 'application/octet-stream'
+        }
+
+        # Send raw bytes in the request body
+        response = requests.post(url, data=message_bytes, headers=headers)
+
+        if 200 <= response.status_code < 300:
+            print(f"  Successfully forwarded to {url}, status: {response.status_code}")
+            return True
+        else:
+            print(f"  Failed to forward to {url}, status: {response.status_code}, response: {response.text}")
+            return False
+    except Exception as e:
+        print(f"  Error forwarding message to {url}: {e}")
+        return False
+
+
+# Main receiver loop
 try:
-    # Create a client with TransportType.Amqp (TCP mode)
+    # Create a client outside the loop to maintain connection
     with ServiceBusClient.from_connection_string(
-            conn_str
+            args.conn,
+            idle_timeout=280
     ) as client:
-        # # First send a message to the topic
-        # print("Attempting to connect and send a message...")
-        # topic_sender = client.get_topic_sender(topic_name)
-        #
-        # topic_message = ServiceBusMessage("Test message content")
-        # topic_sender.send_messages(topic_message)
-        # print("Message sent successfully!")
-
-        # Then try to receive messages
-        print(f"Creating receiver for {topic_name}/{subscription_name}...")
+        # The receiver will wait indefinitely when max_wait_time is None
         receiver = client.get_subscription_receiver(
-            topic_name=topic_name,
-            subscription_name=subscription_name,
-            max_wait_time=5
+            topic_name=args.topic,
+            subscription_name=args.sub,
+            max_wait_time=None
         )
 
-        print(f"Waiting for messages...")
-        received_msgs = receiver.receive_messages(max_message_count=10, max_wait_time=5)
+        with receiver:
+            while running:
+                try:
+                    messages = receiver.receive_messages(max_message_count=10, max_wait_time=None)
 
-        if not received_msgs:
-            print("No messages received within the timeout period")
+                    for msg in messages:
+                        try:
+                            # Get raw bytes without decoding
+                            body_bytes = b''.join(chunk for chunk in msg.body)
+                            print(f"Received message: {len(body_bytes)} bytes")
 
-        for msg in received_msgs:
-            print(f"Received: {msg}")
-            body_content = b''.join(chunk for chunk in msg.body)
-            body_str = body_content.decode('utf-8') if isinstance(body_content, bytes) else str(body_content)
-            print(f"Body: {str(body_str)}")
-            receiver.complete_message(msg)
+                            forward_success = forward_to_api(body_bytes)
+
+                            if forward_success:
+                                receiver.complete_message(msg)
+                            else:
+                                receiver.abandon_message(msg)
+ 
+
+                        except Exception as process_error:
+                            print(f"Error processing message: {process_error}")
+                            receiver.abandon_message(msg)
+
+                except Exception as loop_error:
+                    print(f"Unexpected error: {loop_error}")
+                    if not running:
+                        break
 
 except Exception as e:
-    print(f"Error: {e}")
-    import traceback
-
-    traceback.print_exc()
+    print(f"Fatal error: {e}")
+finally:
+    print("Receiver stopped")
