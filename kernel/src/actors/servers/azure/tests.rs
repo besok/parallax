@@ -12,7 +12,14 @@ async fn smoke_client() -> VoidRes {
 
     let serv_handle = spawn_actor(serv, None)?;
 
-    sleep(Duration::from_millis(1000000)).await;
+    sleep(Duration::from_millis(1000)).await;
+
+    serv_handle
+        .send(AzureMessage::SendMessage(b"Hello, Azure!".to_vec()))
+        .await?;
+    sleep(Duration::from_millis(10000)).await;
+
+    serv_handle.send(AzureMessage::Stop).await?;
 
     Ok(())
 }
