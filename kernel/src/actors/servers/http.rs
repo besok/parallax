@@ -58,7 +58,7 @@ impl BaseHttpServer {
 }
 
 impl Actor<HttpMessage> for BaseHttpServer {
-    fn start(&mut self) -> VoidRes {
+    async fn start(&mut self) -> VoidRes {
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         let addr = format!("{}:{}", self.host, self.port)
             .parse::<SocketAddr>()
@@ -86,7 +86,7 @@ impl Actor<HttpMessage> for BaseHttpServer {
         Ok(())
     }
 
-    fn stop(&mut self) -> VoidRes {
+    async fn stop(&mut self) -> VoidRes {
         log::info!("Stopping HTTP server");
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.try_send(());
@@ -104,16 +104,16 @@ impl Actor<HttpMessage> for BaseHttpServer {
         Ok(())
     }
 
-    fn process(&mut self, message: HttpMessage) -> VoidRes {
+    async fn process(&mut self, message: HttpMessage) -> VoidRes {
         log::info!("Processing message: {:?}", message);
         match message {
             HttpMessage::Start => {
                 log::info!("Http Server [id={}] received start message", self.id);
-                self.start()?;
+                self.start().await?;
             }
             HttpMessage::Stop => {
                 log::info!("Http Server [id={}] received stop message", self.id);
-                self.stop()?;
+                self.stop().await?;
             }
         }
         Ok(())

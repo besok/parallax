@@ -57,7 +57,7 @@ impl SshServer {
 }
 
 impl Actor<SshMessage> for SshServer {
-    fn start(&mut self) -> VoidRes {
+    async fn start(&mut self) -> VoidRes {
         let mut config = Config::default();
         config.keys.push(KeyPair::generate_ed25519().unwrap());
         config.auth_rejection_time = std::time::Duration::from_secs(1);
@@ -112,7 +112,7 @@ impl Actor<SshMessage> for SshServer {
         Ok(())
     }
 
-    fn stop(&mut self) -> VoidRes {
+    async fn stop(&mut self) -> VoidRes {
         if let Some(handle) = self.server_handle.take() {
             handle.abort();
             log::info!("SSH server stopped");
@@ -120,10 +120,10 @@ impl Actor<SshMessage> for SshServer {
         Ok(())
     }
 
-    fn process(&mut self, message: SshMessage) -> VoidRes {
+    async fn process(&mut self, message: SshMessage) -> VoidRes {
         match message {
-            SshMessage::Start => self.start()?,
-            SshMessage::Stop => self.stop()?,
+            SshMessage::Start => self.start().await?,
+            SshMessage::Stop => self.stop().await?,
             SshMessage::AddFile { path, content } => {
                 self.files.lock()?.insert(path, content);
             }

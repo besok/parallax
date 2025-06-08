@@ -18,6 +18,12 @@ impl From<azure_core::Error> for KernelError {
     }
 }
 
+impl From<sqlx::Error> for KernelError {
+    fn from(error: sqlx::Error) -> Self {
+        KernelError::SystemError(error.to_string())
+    }
+}
+
 impl From<()> for KernelError {
     fn from(_: ()) -> Self {
         KernelError::ServerError(ServerError::ClientError("Empty error".to_string()))

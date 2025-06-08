@@ -87,7 +87,7 @@ fn try_to_build_server(id: &str, host: &str, port: usize) -> Res<InnerServer> {
         .ok_or(ServerError::StartError("Failed to create server".into(), id.to_string()).into())
 }
 impl Actor<OpcuaMessage> for OpcuaServer {
-    fn start(&mut self) -> VoidRes {
+    async fn start(&mut self) -> VoidRes {
         log::info!(
             "Starting OPC UA server {} on {}:{}",
             self.id(),
@@ -101,7 +101,7 @@ impl Actor<OpcuaMessage> for OpcuaServer {
         Ok(())
     }
 
-    fn stop(&mut self) -> VoidRes {
+    async fn stop(&mut self) -> VoidRes {
         if let Some(handle) = self.server_handle.take() {
             handle.abort();
             log::info!("OPC UA server stopped");
@@ -109,14 +109,14 @@ impl Actor<OpcuaMessage> for OpcuaServer {
         Ok(())
     }
 
-    fn process(&mut self, message: OpcuaMessage) -> VoidRes {
+    async fn process(&mut self, message: OpcuaMessage) -> VoidRes {
         match message {
             OpcuaMessage::Start => {
-                self.start()?;
+                self.start().await?;
                 Ok(())
             }
             OpcuaMessage::Stop => {
-                self.stop()?;
+                self.stop().await?;
                 Ok(())
             }
             OpcuaMessage::UpdateValue { node_id, value } => {

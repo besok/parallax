@@ -69,7 +69,8 @@ impl<H> Actor<AzureMessage> for AzureTopicListener<H>
 where
     H: ServiceBusMsgHandler + Clone + Send + Sync + 'static,
 {
-    fn start(&mut self) -> VoidRes {
+    // we have to use the python sdk since the Rust SDK does not support the emulator
+    async fn start(&mut self) -> VoidRes {
         log::info!("Starting Azure Client  {}", self.id());
 
         let conn = self.conn.clone();
@@ -94,7 +95,7 @@ where
             )),
         );
 
-        self.http_handle = Some(spawn_actor(http_server, None)?);
+        self.http_handle = Some(spawn_actor(http_server, None).await?);
 
         self.py_handle = Some(start_py_server(
             conn,
@@ -106,7 +107,7 @@ where
         Ok(())
     }
 
-    fn stop(&mut self) -> VoidRes {
+    async fn stop(&mut self) -> VoidRes {
         log::info!("Stopping Azure Client {}", self.id());
         if let Some(h) = self.http_handle.take() {
             if let Some(py_handle) = self.py_handle.take() {
@@ -119,15 +120,15 @@ where
         }
     }
 
-    fn process(&mut self, message: AzureMessage) -> VoidRes {
+    async fn process(&mut self, message: AzureMessage) -> VoidRes {
         match message {
             AzureMessage::Start => {
                 log::info!("Azure Client started");
-                self.start()
+                self.start().await
             }
             AzureMessage::Stop => {
                 log::info!("Azure Client stopped");
-                self.stop()
+                self.stop().await
             }
             AzureMessage::SendMessage(msg) => {
                 log::info!(

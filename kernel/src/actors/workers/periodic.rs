@@ -4,60 +4,48 @@ use crate::error::KernelError;
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
-#[derive(Clone, Debug)]
-struct PeriodicWorkerParams {
+#[derive(Clone)]
+pub struct PeriodicWorker<Task: WorkerTaskHandler = DefaultWorkerTask> {
     stop_signal: Option<Sender<()>>,
     interval: Duration,
+    task: Task,
 }
 
-impl PeriodicWorkerParams {
-    pub fn new(interval: Duration) -> Self {
+pub trait WorkerTaskHandler: Clone + Send + 'static {
+    fn handle(&mut self) -> impl Future<Output = VoidRes> + Send;
+}
+#[derive(Clone, Debug)]
+struct DefaultWorkerTask;
+impl WorkerTaskHandler for DefaultWorkerTask {
+    async fn handle(&mut self) -> VoidRes {
+        log::info!("Default worker task executed");
+        Ok(())
+    }
+}
+
+impl<T: WorkerTaskHandler> PeriodicWorker<T> {
+    pub fn new(task: T, interval: Duration) -> Self {
         Self {
             stop_signal: None,
             interval,
+            task,
         }
     }
-}
 
-trait PeriodicWorker<Mes>: Clone + Send + 'static {
-    fn task(&mut self) -> VoidRes;
-
-    fn error(&self, error: KernelError) -> VoidRes {
-        log::error!("Periodic worker error: {:?}", error);
-        Ok(())
-    }
-
-    fn _process(&mut self, _message: Mes) -> VoidRes {
-        Ok(())
-    }
-
-    fn _stop(&self) -> VoidRes {
-        if let Some(tx) = &self.params().stop_signal {
-            let _ = tx.try_send(());
-        }
-        Ok(())
-    }
-
-    fn params(&self) -> &PeriodicWorkerParams;
-    fn params_mut(&mut self) -> &mut PeriodicWorkerParams;
-
-    fn _start(&mut self) -> VoidRes {
-        let interval = self.params().interval;
+    pub async fn _start(&mut self) -> VoidRes {
+        let interval = self.interval;
         let mut interval_timer = tokio::time::interval(interval);
         let (stop_tx, mut stop_rx) = tokio::sync::mpsc::channel::<()>(1);
-        self.params_mut().stop_signal = Some(stop_tx);
+        self.stop_signal = Some(stop_tx);
 
         let mut cloned_self = self.clone();
-
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     _ = interval_timer.tick() => {
-                        if let Err(e) = cloned_self.task() {
-                            if let Err(e) = cloned_self.error(e) {
-                                log::error!("The report error returns a failed state: {:?}", e);
-                                break;
-                            }
+                        if let Err(e) = cloned_self.task.handle().await {
+                            log::error!("The report error returns a failed state: {:?}", e);
+                            break;
                         }
                     }
                     Some(_) = stop_rx.recv() => {
@@ -71,29 +59,19 @@ trait PeriodicWorker<Mes>: Clone + Send + 'static {
 
         Ok(())
     }
-}
 
-impl<Mes, PW> Actor<Mes> for PW
-where
-    PW: PeriodicWorker<Mes>,
-{
-    fn start(&mut self) -> VoidRes {
-        self._start()
-    }
-
-    fn stop(&mut self) -> VoidRes {
-        self._stop()
-    }
-
-    fn process(&mut self, message: Mes) -> VoidRes {
-        self._process(message)
+    pub async fn _stop(&mut self) -> VoidRes {
+        if let Some(tx) = &self.stop_signal {
+            let _ = tx.try_send(());
+        }
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::actors::spawn_actor;
-    use crate::actors::workers::periodic::{PeriodicWorker, PeriodicWorkerParams};
+    use crate::actors::workers::periodic::{DefaultWorkerTask, PeriodicWorker};
+    use crate::actors::{Actor, spawn_actor};
     use crate::{VoidRes, init_logger};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -101,22 +79,34 @@ mod tests {
 
     #[derive(Clone)]
     struct EchoPeriodicWorker {
-        base: PeriodicWorkerParams,
+        delegate: PeriodicWorker,
         echo: Arc<Mutex<String>>,
+    }
+
+    impl EchoPeriodicWorker {
+        pub fn new(interval: Duration, echo: String) -> Self {
+            Self {
+                delegate: PeriodicWorker::new(DefaultWorkerTask, interval),
+                echo: Arc::new(Mutex::new(echo)),
+            }
+        }
     }
 
     enum EchoMessage {
         Echo(String),
-        StopEchoServer,
+        Stop,
     }
 
-    impl PeriodicWorker<EchoMessage> for EchoPeriodicWorker {
-        fn task(&mut self) -> VoidRes {
-            log::info!("EchoPeriodicWorker is doing work: {:?}", *self.echo);
-            Ok(())
+    impl Actor<EchoMessage> for EchoPeriodicWorker {
+        async fn start(&mut self) -> VoidRes {
+            self.delegate._start().await
         }
 
-        fn _process(&mut self, _message: EchoMessage) -> VoidRes {
+        async fn stop(&mut self) -> VoidRes {
+            self.delegate._stop().await
+        }
+
+        async fn process(&mut self, _message: EchoMessage) -> VoidRes {
             log::info!("EchoPeriodicWorker received a message");
             match _message {
                 EchoMessage::Echo(msg) => {
@@ -124,38 +114,28 @@ mod tests {
                     *echo = msg;
                     log::info!("EchoPeriodicWorker echo updated to: {}", *echo);
                 }
-                EchoMessage::StopEchoServer => {
-                    self._stop()?;
+                EchoMessage::Stop => {
+                    self.stop().await?;
                 }
             }
             Ok(())
-        }
-
-        fn params(&self) -> &PeriodicWorkerParams {
-            &self.base
-        }
-
-        fn params_mut(&mut self) -> &mut PeriodicWorkerParams {
-            &mut self.base
         }
     }
 
     #[tokio::test]
     async fn smoke_test() -> VoidRes {
         init_logger();
-        let worker = EchoPeriodicWorker {
-            base: PeriodicWorkerParams::new(Duration::from_secs(2)),
-            echo: Arc::new(Mutex::new("Initial Echo Message".to_string())),
-        };
+        let worker =
+            EchoPeriodicWorker::new(Duration::from_secs(1), "Initial Echo Message".to_string());
 
-        let handler = spawn_actor(worker, None)?;
+        let handler = spawn_actor(worker, None).await?;
 
         tokio::time::sleep(Duration::from_secs(1)).await;
         handler
             .send(EchoMessage::Echo("New Echo Message".to_string()))
             .await?;
         tokio::time::sleep(Duration::from_secs(3)).await;
-        handler.send(EchoMessage::StopEchoServer).await?;
+        handler.send(EchoMessage::Stop).await?;
 
         Ok(())
     }

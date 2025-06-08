@@ -48,15 +48,15 @@ impl StateFullHttpServer {
 }
 
 impl Actor<HttpMessageExtra> for StateFullHttpServer {
-    fn start(&mut self) -> VoidRes {
-        self.inner.start()
+    async fn start(&mut self) -> VoidRes {
+        self.inner.start().await
     }
 
-    fn stop(&mut self) -> VoidRes {
-        self.inner.stop()
+    async fn stop(&mut self) -> VoidRes {
+        self.inner.stop().await
     }
 
-    fn process(&mut self, message: HttpMessageExtra) -> VoidRes {
+    async fn process(&mut self, message: HttpMessageExtra) -> VoidRes {
         match message {
             HttpMessageExtra::AddItem(v) => {
                 log::info!(
@@ -71,7 +71,7 @@ impl Actor<HttpMessageExtra> for StateFullHttpServer {
                     "StateFullHttpServer [id={}] received a message for delegate",
                     self.inner.id()
                 );
-                self.inner.process(mes)
+                self.inner.process(mes).await
             }
         }
     }
@@ -107,7 +107,7 @@ async fn smoke_statefull_http() -> VoidRes {
     let serv =
         StateFullHttpServer::new("statefull_http".to_string(), "127.0.0.1".to_string(), 8080);
 
-    let serv_handle = spawn_actor(serv, None)?;
+    let serv_handle = spawn_actor(serv, None).await?;
 
     assert!(get_items().await?.is_empty());
 

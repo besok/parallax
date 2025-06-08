@@ -31,12 +31,12 @@ impl<Mes> ActorHandle<Mes> {
 }
 
 pub trait Actor<Mes> {
-    fn start(&mut self) -> VoidRes;
-    fn stop(&mut self) -> VoidRes;
-    fn process(&mut self, message: Mes) -> VoidRes;
+    fn start(&mut self) -> impl Future<Output = VoidRes> + Send;
+    fn stop(&mut self) -> impl Future<Output = VoidRes> + Send;
+    fn process(&mut self, message: Mes) -> impl Future<Output = VoidRes> + Send;
 }
 
-pub fn spawn_actor<M, Serv>(
+pub async fn spawn_actor<M, Serv>(
     mut server: Serv,
     err_sender: Option<Sender<KernelError>>,
 ) -> Res<ActorHandle<M>>
@@ -45,23 +45,27 @@ where
     M: Send + 'static,
 {
     let (sender, mut receiver) = mpsc::channel::<M>(32);
-    tokio::spawn(async move {
-        if let Err(e) = server.start() {
-            if let Some(err_sender) = err_sender {
-                let _ = err_sender.send(e).await;
-            }
-            return;
+    if let Err(e) = server.start().await {
+        let msg = format!("Failed to start server: {:?}", e);
+        if let Some(err_sender) = err_sender {
+            let _ = err_sender.send(e).await;
         }
+        return Err(KernelError::SystemError(msg));
+    }
+    tokio::spawn(async move {
         loop {
             tokio::select! {
-                Some(message) = receiver.recv() => {
-                    if let Err(e) = server.process(message) {
-                        if let Some(ref err_sender) = err_sender {
-                            let _ = err_sender.send(e).await;
+                    Some(message) = receiver.recv() => {
+                        if let Err(e) = server.process(message).await {
+                            if let Some(ref err_sender) = err_sender {
+                                let _ = err_sender.send(e).await;
+                            }
                         }
                     }
+                      else => {
+                       let _ = server.stop().await;
+                        break;
                 }
-                else => break,
             }
         }
     });
@@ -82,7 +86,7 @@ mod tests {
     async fn test_http_server() -> VoidRes {
         init_logger();
 
-        let server_handle = spawn_actor(BaseHttpServer::default(), None)?;
+        let server_handle = spawn_actor(BaseHttpServer::default(), None).await?;
 
         let client = reqwest::Client::new();
         let response = client

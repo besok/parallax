@@ -63,7 +63,7 @@ impl client::Handler for TestSshClient {
 #[tokio::test]
 async fn smoke_ssh() -> VoidRes {
     init_logger();
-    let server_handle = spawn_actor(SshServer::default(), None)?;
+    let server_handle = spawn_actor(SshServer::default(), None).await?;
     sleep(Duration::from_millis(100)).await;
 
     let client = TestSshClient;

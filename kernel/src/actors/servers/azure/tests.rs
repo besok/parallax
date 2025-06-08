@@ -10,7 +10,7 @@ async fn smoke_client() -> VoidRes {
     init_logger();
     let serv: AzureTopicListener<EchoServiceBusMsgHandler> = AzureTopicListener::default();
 
-    let serv_handle = spawn_actor(serv, None)?;
+    let serv_handle = spawn_actor(serv, None).await?;
 
     sleep(Duration::from_millis(1000)).await;
 
