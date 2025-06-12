@@ -3,6 +3,7 @@ use bevy::prelude::Component;
 pub mod actors;
 pub mod error;
 pub mod vis2d;
+pub mod gauges;
 
 pub fn init_logger() {
     use chrono::Local;
