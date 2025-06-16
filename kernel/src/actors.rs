@@ -36,16 +36,16 @@ pub trait Actor<Mes> {
     fn process(&mut self, message: Mes) -> impl Future<Output = VoidRes> + Send;
 }
 
-pub async fn spawn_actor<M, Serv>(
-    mut server: Serv,
+pub async fn spawn_actor<M, A>(
+    mut actor: A,
     err_sender: Option<Sender<KernelError>>,
 ) -> Res<ActorHandle<M>>
 where
-    Serv: Actor<M> + Send + 'static,
+    A: Actor<M> + Send + 'static,
     M: Send + 'static,
 {
     let (sender, mut receiver) = mpsc::channel::<M>(32);
-    if let Err(e) = server.start().await {
+    if let Err(e) = actor.start().await {
         let msg = format!("Failed to start server: {:?}", e);
         if let Some(err_sender) = err_sender {
             let _ = err_sender.send(e).await;
@@ -56,14 +56,14 @@ where
         loop {
             tokio::select! {
                     Some(message) = receiver.recv() => {
-                        if let Err(e) = server.process(message).await {
+                        if let Err(e) = actor.process(message).await {
                             if let Some(ref err_sender) = err_sender {
                                 let _ = err_sender.send(e).await;
                             }
                         }
                     }
                       else => {
-                       let _ = server.stop().await;
+                       let _ = actor.stop().await;
                         break;
                 }
             }
@@ -71,6 +71,14 @@ where
     });
 
     Ok(ActorHandle::new(sender))
+}
+
+pub async fn spawn_just_actor<M, A>(actor: A) -> Res<ActorHandle<M>>
+where
+    A: Actor<M> + Send + 'static,
+    M: Send + 'static,
+{
+    spawn_actor(actor, None).await
 }
 
 mod tests {
