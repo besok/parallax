@@ -8,11 +8,11 @@ type Marker = String;
 struct Reading {
     marker: Marker,
     timestamp: DateTime<chrono::Utc>,
-    parent: Option<Marker>,
+    parent: Marker,
 }
 
 impl Reading {
-    pub fn new(marker: Marker, timestamp: DateTime<chrono::Utc>, parent: Option<Marker>) -> Self {
+    pub fn new(marker: Marker, timestamp: DateTime<chrono::Utc>, parent: Marker) -> Self {
         Self {
             marker,
             timestamp,
@@ -35,19 +35,26 @@ impl Stopwatch {
         }
     }
 
-    pub fn read<Marker: Into<String>>(&mut self, marker: Marker) -> DateTime<chrono::Utc> {
-        self.read_to(marker.into(), self.parents.last().cloned())
+    pub fn read<M: Into<String>>(&mut self, marker: M) -> DateTime<chrono::Utc> {
+        let marker = marker.into();
+        let parent = self.parents.last().unwrap_or(&marker);
+        self.read_to(marker.clone(), parent.clone())
+    }
+
+    pub fn read_start<Marker: Into<String>>(&mut self, marker: Marker) -> DateTime<chrono::Utc> {
+        let marker = marker.into();
+        self.read_to(marker.clone(), marker)
     }
 
     pub fn read_to<Marker: Into<String>>(
         &mut self,
         marker: Marker,
-        parent: Option<Marker>,
+        parent: Marker,
     ) -> DateTime<chrono::Utc> {
         let time = chrono::Utc::now();
 
         self.readings
-            .push(Reading::new(marker.into(), time, parent.map(|x| x.into())));
+            .push(Reading::new(marker.into(), time, parent.into()));
         time
     }
 
@@ -57,22 +64,17 @@ impl Stopwatch {
         last
     }
 
-    pub fn get_parent(&self, idx: usize) -> Option<Marker> {
-        self.parents.get(idx).cloned()
+    pub fn get_parent(&self, idx: usize) -> Option<&Marker> {
+        self.parents.get(idx)
     }
     pub fn readings(&self) -> HashMap<Marker, Vec<Reading>> {
-        let mut parents = self
-            .parents
-            .iter()
-            .map(|x| (x.clone(), Vec::new()))
-            .collect::<HashMap<_, _>>();
+        let mut parents = HashMap::new();
 
         for r in self.readings.iter() {
-            if let Some(parent) = &r.parent {
-                parents.get_mut(parent).map(|x| x.push(r.clone()));
-            } else {
-                parents.insert(r.marker.clone(), vec![r.clone()]);
-            }
+            parents
+                .entry(r.parent.clone())
+                .and_modify(|e: &mut Vec<_>| e.push(r.clone()))
+                .or_insert(vec![r.clone()]);
         }
 
         parents
@@ -81,12 +83,12 @@ impl Stopwatch {
 
 impl Display for Stopwatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Stopwatch");
+        let _ = writeln!(f, "Stopwatch");
         let readings = self.readings();
         for (marker, readings) in readings.iter() {
-            writeln!(f, " - Marker: {},", marker);
+            let _ = writeln!(f, " - Marker: {},", marker);
             for reading in readings {
-                writeln!(f, " -- {}: {},", reading.marker, reading.timestamp);
+                let _ = writeln!(f, "  - {}: {},", reading.marker, reading.timestamp);
             }
         }
         Ok(())
@@ -105,14 +107,13 @@ mod tests {
         s.new_parent("a");
         s.read("b");
         s.read("c");
-        
-        s.read_to("d", None);
-        
+
+        s.read_start("d");
+
         s.new_parent("b");
-        
+
         s.read("e");
 
         print!("{}", s);
-        
     }
 }
