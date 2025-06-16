@@ -1,4 +1,4 @@
-# [Di]gital [Fa]ctory [Lab]oratory
+# Digital Factory Laboratory (DiFiLab)
 
 This project is a framework for building Industrial Digital factory layout
 and performing Virtual Commissioning of complex manufacturing and logistics systems. 
