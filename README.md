@@ -1,7 +1,9 @@
-# Industrial Digital Twin & Virtual Commissioning Framework
+# [Di]gital [Fa]ctory [Lab]oratory
 
-This project is a framework for building Industrial Digital Twins and performing Virtual Commissioning of complex
-manufacturing and logistics systems. Developed in Rust, it aims to provide a high-performance, reliable, and concurrent
+This project is a framework for building Industrial Digital factory layout
+and performing Virtual Commissioning of complex manufacturing and logistics systems. 
+
+Developed in Rust, it aims to provide a high-performance, reliable, and concurrent
 platform for simulating factory layouts, equipment behavior, and control system logic.
 
 ## Project Goal
