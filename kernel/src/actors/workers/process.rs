@@ -9,7 +9,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::task::JoinHandle;
 
-struct ProcessWorker {
+pub struct ProcessWorker {
     name: String,
     exe: String,
     cmd: String,
@@ -31,7 +31,7 @@ impl ProcessWorker {
     }
 }
 
-enum ProcessWorkerMessage {
+pub enum ProcessWorkerMessage {
     Stop,
 }
 
@@ -39,7 +39,7 @@ impl Actor<ProcessWorkerMessage> for ProcessWorker {
     async fn start(&mut self) -> VoidRes {
         let (abort_tx, mut abort_rx) = tokio::sync::oneshot::channel();
         self.child_abort = Some(abort_tx);
- 
+
         let exe = self.exe.clone();
         let cmd = self.cmd.clone();
         let env = self.env.clone();
@@ -86,7 +86,7 @@ impl Actor<ProcessWorkerMessage> for ProcessWorker {
         Ok(())
     }
 
-    async fn stop(&mut self) -> VoidRes { 
+    async fn stop(&mut self) -> VoidRes {
         if let Some(abort_tx) = self.child_abort.take() {
             let _ = abort_tx.send(());
         }

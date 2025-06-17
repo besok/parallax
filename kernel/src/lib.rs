@@ -29,5 +29,5 @@ pub fn init_logger() {
         })
         .init();
 }
-type Res<T> = Result<T, error::KernelError>;
-type VoidRes = Res<()>;
+pub type Res<T> = Result<T, error::KernelError>;
+pub type VoidRes = Res<()>;

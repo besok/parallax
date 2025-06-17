@@ -5,7 +5,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task;
 
 pub mod servers;
-mod workers;
+pub mod workers;
 
 pub struct ActorHandle<Mes> {
     sender: Sender<Mes>,
