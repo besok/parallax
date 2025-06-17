@@ -95,7 +95,7 @@ where
             )),
         );
 
-        self.http_handle = Some(spawn_actor(http_server, None).await?);
+        self.http_handle = Some(spawn_actor_with(http_server, None).await?);
 
         self.py_handle = Some(start_py_server(
             conn,
@@ -146,7 +146,7 @@ where
     }
 }
 
-use crate::actors::{Actor, ActorHandle, spawn_actor};
+use crate::actors::{Actor, ActorHandle, spawn_actor_with};
 
 use crate::actors::servers::http::{BaseHttpServer, HttpMessage};
 use axum::Router;

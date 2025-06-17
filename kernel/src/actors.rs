@@ -36,7 +36,7 @@ pub trait Actor<Mes> {
     fn process(&mut self, message: Mes) -> impl Future<Output = VoidRes> + Send;
 }
 
-pub async fn spawn_actor<M, A>(
+pub async fn spawn_actor_with<M, A>(
     mut actor: A,
     err_sender: Option<Sender<KernelError>>,
 ) -> Res<ActorHandle<M>>
@@ -73,18 +73,18 @@ where
     Ok(ActorHandle::new(sender))
 }
 
-pub async fn spawn_just_actor<M, A>(actor: A) -> Res<ActorHandle<M>>
+pub async fn spawn_actor<M, A>(actor: A) -> Res<ActorHandle<M>>
 where
     A: Actor<M> + Send + 'static,
     M: Send + 'static,
 {
-    spawn_actor(actor, None).await
+    spawn_actor_with(actor, None).await
 }
 
 mod tests {
     use crate::actors::servers::ServerError;
     use crate::actors::servers::http::{BaseHttpServer, HttpMessage};
-    use crate::actors::spawn_actor;
+    use crate::actors::spawn_actor_with;
     use crate::{VoidRes, init_logger};
     use serde_json::Value;
     use std::time::Duration;
@@ -94,7 +94,7 @@ mod tests {
     async fn test_http_server() -> VoidRes {
         init_logger();
 
-        let server_handle = spawn_actor(BaseHttpServer::default(), None).await?;
+        let server_handle = spawn_actor_with(BaseHttpServer::default(), None).await?;
 
         let client = reqwest::Client::new();
         let response = client

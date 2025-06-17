@@ -1,5 +1,5 @@
 use crate::actors::workers::process::{ProcessWorker, ProcessWorkerMessage};
-use crate::actors::{spawn_actor, spawn_just_actor};
+use crate::actors::{spawn_actor_with, spawn_actor};
 use crate::{VoidRes, init_logger};
 
 #[tokio::test]
@@ -13,7 +13,7 @@ async fn test_process() -> VoidRes {
         ],
     );
 
-    let w01 = spawn_just_actor(w).await?;
+    let w01 = spawn_actor(w).await?;
  
     
     
