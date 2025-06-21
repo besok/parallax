@@ -42,7 +42,7 @@ async fn sqlite_smoke() -> VoidRes {
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )",
     )
-    .execute(&pool) // Execute the query on the connection pool
+    .execute(&pool)
     .await?;
 
     sqlx::query("INSERT INTO tasks (description, completed) VALUES (?, ?)")

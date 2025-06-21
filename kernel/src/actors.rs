@@ -63,7 +63,7 @@ where
                         }
                     }
                       else => {
-                       let _ = server.stop().await;
+                        let _ = server.stop().await;
                         break;
                 }
             }

@@ -1,12 +1,12 @@
 [package]
-name = "doppel-kernel"
+name = "parallax-kernel"
 version = "0.1.0"
 edition = "2024"
-description = "Core component for Doppel framework"
+description = "Core component for Parallax"
 license = "Apache-2.0"
-repository = "https://github.com/besok/doppel"
-homepage = "https://github.com/besok/doppel"
-documentation = "https://docs.rs/doppel"
+repository = "https://github.com/besok/parallax.git"
+homepage = "https://github.com/besok/parallax.git"
+documentation = "https://docs.rs/parallax"
 keywords = ["digital-twin", "simulation", "IoT", "rust", "data-analytics"]
 categories = ["simulation", "data-structures", "network-programming"]
 readme = "README.md"

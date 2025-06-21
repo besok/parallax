@@ -1,4 +1,4 @@
-# Industrial Digital Twin & Virtual Commissioning Framework
+# Factory Floor and  Virtual Commissioning Framework
 
 This project is a framework for building Industrial Digital Twins and performing Virtual Commissioning of complex
 manufacturing and logistics systems. Developed in Rust, it aims to provide a high-performance, reliable, and concurrent

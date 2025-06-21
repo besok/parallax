@@ -57,7 +57,7 @@ pub trait DbTaskHandler<DB: Database>: Clone + Send + 'static {
     fn handle(
         &mut self,
         pool: &sqlx::Pool<DB>,
-    ) -> impl std::future::Future<Output = Result<(), sqlx::Error>> + std::marker::Send;
+    ) -> impl Future<Output = Result<(), sqlx::Error>> + Send;
 }
 
 enum DbMessage {
@@ -67,7 +67,6 @@ enum DbMessage {
 
 impl<H> Actor<DbMessage> for DbWorker<Sqlite, H>
 where
-    // DB: Database,
     H: DbTaskHandler<Sqlite>,
 {
     async fn start(&mut self) -> VoidRes {
