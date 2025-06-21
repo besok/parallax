@@ -1,6 +1,6 @@
 use crate::actors::servers::ServerError;
 use crate::actors::servers::http::{BaseHttpServer, HttpMessage, default_router};
-use crate::actors::{Actor, spawn_actor};
+use crate::actors::{Actor, spawn_actor_with};
 use crate::{Res, VoidRes, init_logger};
 use axum::extract::{Path, State};
 use axum::routing::get;
@@ -107,7 +107,7 @@ async fn smoke_statefull_http() -> VoidRes {
     let serv =
         StateFullHttpServer::new("statefull_http".to_string(), "127.0.0.1".to_string(), 8080);
 
-    let serv_handle = spawn_actor(serv, None).await?;
+    let serv_handle = spawn_actor_with(serv, None).await?;
 
     assert!(get_items().await?.is_empty());
 

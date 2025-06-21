@@ -1,6 +1,6 @@
 use crate::actors::servers::azure;
 use crate::actors::servers::azure::{AzureMessage, AzureTopicListener, EchoServiceBusMsgHandler};
-use crate::actors::spawn_actor;
+use crate::actors::spawn_actor_with;
 use crate::{VoidRes, init_logger};
 use std::time::Duration;
 use tokio::time::sleep;
@@ -10,7 +10,7 @@ async fn smoke_client() -> VoidRes {
     init_logger();
     let serv: AzureTopicListener<EchoServiceBusMsgHandler> = AzureTopicListener::default();
 
-    let serv_handle = spawn_actor(serv, None).await?;
+    let serv_handle = spawn_actor_with(serv, None).await?;
 
     sleep(Duration::from_millis(1000)).await;
 

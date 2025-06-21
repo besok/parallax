@@ -5,7 +5,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task;
 
 pub mod servers;
-mod workers;
+pub mod workers;
 
 pub struct ActorHandle<Mes> {
     sender: Sender<Mes>,
@@ -36,16 +36,16 @@ pub trait Actor<Mes> {
     fn process(&mut self, message: Mes) -> impl Future<Output = VoidRes> + Send;
 }
 
-pub async fn spawn_actor<M, Serv>(
-    mut server: Serv,
+pub async fn spawn_actor_with<M, A>(
+    mut actor: A,
     err_sender: Option<Sender<KernelError>>,
 ) -> Res<ActorHandle<M>>
 where
-    Serv: Actor<M> + Send + 'static,
+    A: Actor<M> + Send + 'static,
     M: Send + 'static,
 {
     let (sender, mut receiver) = mpsc::channel::<M>(32);
-    if let Err(e) = server.start().await {
+    if let Err(e) = actor.start().await {
         let msg = format!("Failed to start server: {:?}", e);
         if let Some(err_sender) = err_sender {
             let _ = err_sender.send(e).await;
@@ -56,14 +56,14 @@ where
         loop {
             tokio::select! {
                     Some(message) = receiver.recv() => {
-                        if let Err(e) = server.process(message).await {
+                        if let Err(e) = actor.process(message).await {
                             if let Some(ref err_sender) = err_sender {
                                 let _ = err_sender.send(e).await;
                             }
                         }
                     }
                       else => {
-                        let _ = server.stop().await;
+                       let _ = actor.stop().await;
                         break;
                 }
             }
@@ -73,10 +73,18 @@ where
     Ok(ActorHandle::new(sender))
 }
 
+pub async fn spawn_actor<M, A>(actor: A) -> Res<ActorHandle<M>>
+where
+    A: Actor<M> + Send + 'static,
+    M: Send + 'static,
+{
+    spawn_actor_with(actor, None).await
+}
+
 mod tests {
     use crate::actors::servers::ServerError;
     use crate::actors::servers::http::{BaseHttpServer, HttpMessage};
-    use crate::actors::spawn_actor;
+    use crate::actors::spawn_actor_with;
     use crate::{VoidRes, init_logger};
     use serde_json::Value;
     use std::time::Duration;
@@ -86,7 +94,7 @@ mod tests {
     async fn test_http_server() -> VoidRes {
         init_logger();
 
-        let server_handle = spawn_actor(BaseHttpServer::default(), None).await?;
+        let server_handle = spawn_actor_with(BaseHttpServer::default(), None).await?;
 
         let client = reqwest::Client::new();
         let response = client

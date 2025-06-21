@@ -71,7 +71,7 @@ impl<T: WorkerTaskHandler> PeriodicWorker<T> {
 #[cfg(test)]
 mod tests {
     use crate::actors::workers::periodic::{DefaultWorkerTask, PeriodicWorker};
-    use crate::actors::{Actor, spawn_actor};
+    use crate::actors::{Actor, spawn_actor_with};
     use crate::{VoidRes, init_logger};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -128,7 +128,7 @@ mod tests {
         let worker =
             EchoPeriodicWorker::new(Duration::from_secs(1), "Initial Echo Message".to_string());
 
-        let handler = spawn_actor(worker, None).await?;
+        let handler = spawn_actor_with(worker, None).await?;
 
         tokio::time::sleep(Duration::from_secs(1)).await;
         handler

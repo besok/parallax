@@ -1,6 +1,6 @@
 use crate::actors::servers::opcua::data::{Namespace, Node, ServerStructure};
 use crate::actors::servers::opcua::{OpcuaMessage, OpcuaServer};
-use crate::actors::spawn_actor;
+use crate::actors::spawn_actor_with;
 use crate::{VoidRes, folder, init_logger, object, variable};
 use opcua::types::{DataTypeId, NodeId, QualifiedName, Variant};
 use std::time::Duration;
@@ -20,7 +20,7 @@ async fn smoke_opcua() -> VoidRes {
         vec![Namespace(1, "namespace1".to_string())],
         vec![folder],
     )));
-    let server_handle = spawn_actor(server, None).await?;
+    let server_handle = spawn_actor_with(server, None).await?;
     sleep(Duration::from_millis(100)).await;
 
     server_handle.send(OpcuaMessage::Stop).await?;

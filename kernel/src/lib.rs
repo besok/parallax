@@ -3,6 +3,7 @@ use bevy::prelude::Component;
 pub mod actors;
 pub mod error;
 pub mod vis2d;
+pub mod gauges;
 
 pub fn init_logger() {
     use chrono::Local;
@@ -28,5 +29,5 @@ pub fn init_logger() {
         })
         .init();
 }
-type Res<T> = Result<T, error::KernelError>;
-type VoidRes = Res<()>;
+pub type Res<T> = Result<T, error::KernelError>;
+pub type VoidRes = Res<()>;

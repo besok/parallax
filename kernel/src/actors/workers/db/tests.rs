@@ -1,4 +1,4 @@
-use crate::actors::spawn_actor;
+use crate::actors::spawn_actor_with;
 use crate::actors::workers::db::{DbMessage, DbTaskHandler, DbWorker};
 use crate::{VoidRes, init_logger};
 use sqlx::{Error, Pool, Row, Sqlite, SqlitePool};
@@ -51,7 +51,7 @@ async fn sqlite_smoke() -> VoidRes {
         .execute(&pool)
         .await?;
 
-    let handle = spawn_actor(
+    let handle = spawn_actor_with(
         DbWorker::new(DataQuery, Duration::from_secs(1), pool.clone()),
         None,
     )
