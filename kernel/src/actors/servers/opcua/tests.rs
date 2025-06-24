@@ -21,7 +21,7 @@ async fn smoke_opcua() -> VoidRes {
         vec![folder],
     )));
     let server_handle = spawn_actor_with(server, None).await?;
-    sleep(Duration::from_millis(100)).await;
+    sleep(Duration::from_millis(1000000)).await;
 
     server_handle.send(OpcuaMessage::Stop).await?;
     sleep(Duration::from_millis(100)).await;

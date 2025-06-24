@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use difilab_kernel::vis2d::pos2d::{Pos2d, Pos2dElems};
-use difilab_kernel::vis2d::setup_floor;
+use parallax_kernel::vis2d::pos2d::{Pos2d, Pos2dElems};
+use parallax_kernel::vis2d::setup_floor;
 
 fn main() {
     let mut app = App::new();

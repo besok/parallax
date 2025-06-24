@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLockWriteGuard;
 
-type NamespaceIndex = u16;
-type NamespaceUri = String;
+pub type NamespaceIndex = u16;
+pub type NamespaceUri = String;
 
 #[derive(Debug, Clone)]
 pub struct Namespace(pub NamespaceIndex, pub NamespaceUri);
@@ -261,7 +261,7 @@ impl ServerStructure {
                 .map_err(|_| KernelError::client("Can not register namespace"))?;
 
             if *idx != result {
-                return Err(KernelError::client("Namespace index mismatch"));
+                return Err(KernelError::client(format!("Namespace index mismatch {idx} != {result}").as_str()));
             }
         }
 
