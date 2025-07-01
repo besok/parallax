@@ -9,10 +9,12 @@ use crate::actors::servers::opcua::data::ServerStructure;
 use crate::{Res, VoidRes};
 use opcua::crypto::SecurityPolicy;
 use opcua::server::builder::ServerBuilder;
-use opcua::server::prelude::{AddressSpace, ServerEndpoint};
+use opcua::server::config::ServerUserToken;
+use opcua::server::prelude::{AddressSpace, Config, ServerConfig, ServerEndpoint};
 use opcua::server::server::Server as InnerServer;
 use opcua::sync::RwLock;
 use opcua::types::{DateTime, MessageSecurityMode, NodeId, Variant};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -49,7 +51,7 @@ impl OpcuaServer {
         let server = Arc::new(RwLock::new(try_to_build_server(
             id.as_str(),
             host.as_str(),
-            port as usize,
+            port,
         )?));
         structure.process_server(server.clone())?;
         Ok(OpcuaServer {
@@ -66,21 +68,37 @@ impl OpcuaServer {
         self.id.clone()
     }
 }
-fn try_to_build_server(id: &str, host: &str, port: usize) -> Res<InnerServer> {
+fn try_to_build_server(id: &str, host: &str, port: u16) -> Res<InnerServer> {
     ServerBuilder::new()
         .application_name(id)
-        .discovery_urls(vec![format!("opc.tcp://{}:{}", host, port)])
+        .host_and_port(host, port)
+        .discovery_urls(vec!["/".to_string()])
         .create_sample_keypair(true)
         .pki_dir("./pki-server")
         .discovery_server_url(None)
         .trust_client_certs()
+        .user_token(
+            "sample_password_user",
+            ServerUserToken::user_pass("sample1", "sample1pwd"),
+        )
+        .user_token(
+            "sample_x509_user",
+            ServerUserToken::x509(
+                "sample_x509",
+                PathBuf::from("./users/sample-x509.der").as_path(),
+            ),
+        )
         .endpoint(
             "none",
             ServerEndpoint::new(
                 "/",
                 SecurityPolicy::None,
                 MessageSecurityMode::None,
-                &["ANONYMOUS".to_string()],
+                &[
+                    "ANONYMOUS".to_string(),
+                    "sample_password_user".to_string(),
+                    "sample_x509_user".to_string(),
+                ],
             ),
         )
         .server()

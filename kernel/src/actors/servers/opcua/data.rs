@@ -30,14 +30,19 @@ pub struct Node {
 }
 
 impl Node {
-    fn process(node: Node, parent: &NodeId, addr: &mut AddressSpace) -> VoidRes {
+    fn process(node: Node, parent: Option<&NodeId>, addr: &mut AddressSpace) -> VoidRes {
         let id = &node.node_id;
         log::info!("Processing node: {:?}", id);
         let browse_name = node.browse_name.clone();
         let display_name = node.display_name.clone();
         match &node.delegate {
             NodeDelegate::Folder => {
-                if !addr.add_folder_with_id(id, browse_name, display_name, parent) {
+                if !addr.add_folder_with_id(
+                    id,
+                    browse_name,
+                    display_name,
+                    parent.unwrap_or(&NodeId::root_folder_id()),
+                ) {
                     return Err(KernelError::client(&format!(
                         "Failed to insert folder: {}",
                         id
@@ -45,8 +50,8 @@ impl Node {
                 }
             }
             NodeDelegate::Object => {
-                let object =
-                    ObjectBuilder::new(id, browse_name, display_name).organized_by(parent.clone());
+                let object = ObjectBuilder::new(id, browse_name, display_name)
+                    .organized_by(parent.unwrap_or(&NodeId::objects_folder_id()));
 
                 if !object.is_valid() {
                     return Err(KernelError::client(&format!("Invalid object type: {}", id)));
@@ -69,7 +74,7 @@ impl Node {
                     .value(value.clone())
                     .data_type(data_type)
                     .value_rank(*value_rank)
-                    .organized_by(parent.clone());
+                    .organized_by(parent.unwrap_or(&NodeId::root_folder_id()).clone());
 
                 if !&builder.is_valid() {
                     return Err(KernelError::client(&format!(
@@ -91,7 +96,7 @@ impl Node {
             } => {
                 let builder =
                     VariableBuilder::new(id, node.browse_name.clone(), node.display_name.clone())
-                        .property_of(parent)
+                        .property_of(parent.unwrap_or(&NodeId::root_folder_id()))
                         .value(value.clone())
                         .data_type(data_type)
                         .value_rank(*value_rank);
@@ -119,7 +124,7 @@ impl Node {
         }
 
         for child in node.children {
-            Node::process(child, id, addr)?;
+            Node::process(child, Some(id), addr)?;
         }
 
         Ok(())
@@ -261,12 +266,14 @@ impl ServerStructure {
                 .map_err(|_| KernelError::client("Can not register namespace"))?;
 
             if *idx != result {
-                return Err(KernelError::client(format!("Namespace index mismatch {idx} != {result}").as_str()));
+                return Err(KernelError::client(
+                    format!("Namespace index mismatch {idx} != {result}").as_str(),
+                ));
             }
         }
 
         for node in &self.nodes {
-            Node::process(node.clone(), &NodeId::root_folder_id(), &mut addr)?;
+            Node::process(node.clone(), None, &mut addr)?;
         }
 
         Ok(())
