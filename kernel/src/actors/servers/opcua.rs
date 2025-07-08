@@ -1,7 +1,5 @@
 pub mod data;
 mod macros;
-#[cfg(test)]
-mod tests;
 
 use crate::actors::Actor;
 use crate::actors::servers::ServerError;
@@ -10,7 +8,7 @@ use crate::{Res, VoidRes};
 use opcua::crypto::SecurityPolicy;
 use opcua::server::builder::ServerBuilder;
 use opcua::server::config::ServerUserToken;
-use opcua::server::prelude::{AddressSpace, Config, ServerConfig, ServerEndpoint};
+use opcua::server::prelude::{AddressSpace, Config, Server, ServerConfig, ServerEndpoint};
 use opcua::server::server::Server as InnerServer;
 use opcua::sync::RwLock;
 use opcua::types::{DateTime, MessageSecurityMode, NodeId, Variant};
@@ -22,42 +20,18 @@ use tokio::task::JoinHandle;
 
 pub struct OpcuaServer {
     id: String,
-    host: String,
-    port: u16,
     server_handle: Option<JoinHandle<()>>,
     structure: ServerStructure,
     server: Arc<RwLock<InnerServer>>,
 }
 
 impl OpcuaServer {
-    pub fn new_default(structure: Option<ServerStructure>) -> Self {
-        OpcuaServer::new(
-            "opcua_server",
-            "127.0.0.1",
-            4840,
-            structure.unwrap_or_default(),
-        )
-        .expect("Failed to create default OPC UA server")
-    }
-
-    pub fn new(
-        id: impl Into<String>,
-        host: impl Into<String>,
-        port: u16,
-        structure: ServerStructure,
-    ) -> Res<Self> {
+    pub fn new(id: impl Into<String>, cfg: &PathBuf, structure: ServerStructure) -> Res<Self> {
         let id = id.into();
-        let host = host.into();
-        let server = Arc::new(RwLock::new(try_to_build_server(
-            id.as_str(),
-            host.as_str(),
-            port,
-        )?));
+        let server = Arc::new(RwLock::new(try_to_build_server(id.as_str(), cfg)?));
         structure.process_server(server.clone())?;
         Ok(OpcuaServer {
             id,
-            host,
-            port,
             structure,
             server,
             server_handle: None,
@@ -68,50 +42,16 @@ impl OpcuaServer {
         self.id.clone()
     }
 }
-fn try_to_build_server(id: &str, host: &str, port: u16) -> Res<InnerServer> {
-    ServerBuilder::new()
-        .application_name(id)
-        .host_and_port(host, port)
-        .discovery_urls(vec!["/".to_string()])
-        .create_sample_keypair(true)
-        .pki_dir("./pki-server")
-        .discovery_server_url(None)
-        .trust_client_certs()
-        .user_token(
-            "sample_password_user",
-            ServerUserToken::user_pass("sample1", "sample1pwd"),
-        )
-        .user_token(
-            "sample_x509_user",
-            ServerUserToken::x509(
-                "sample_x509",
-                PathBuf::from("./users/sample-x509.der").as_path(),
-            ),
-        )
-        .endpoint(
-            "none",
-            ServerEndpoint::new(
-                "/",
-                SecurityPolicy::None,
-                MessageSecurityMode::None,
-                &[
-                    "ANONYMOUS".to_string(),
-                    "sample_password_user".to_string(),
-                    "sample_x509_user".to_string(),
-                ],
-            ),
-        )
-        .server()
-        .ok_or(ServerError::StartError("Failed to create server".into(), id.to_string()).into())
+fn try_to_build_server(id: &str, config: &PathBuf) -> Res<InnerServer> {
+    Ok(ServerConfig::load(config)
+        .map(|cfg| Server::new(cfg))
+        .map_err(|_| {
+            ServerError::StartError("Failed to load server config".into(), id.to_string())
+        })?)
 }
 impl Actor<OpcuaMessage> for OpcuaServer {
     async fn start(&mut self) -> VoidRes {
-        log::info!(
-            "Starting OPC UA server {} on {}:{}",
-            self.id(),
-            self.host,
-            self.port
-        );
+        log::info!("Starting OPC UA server {}", self.id(),);
 
         self.server_handle = Some(tokio::spawn(InnerServer::new_server_task(
             self.server.clone(),
