@@ -42,12 +42,24 @@ macro_rules! object {
             vec![$($child),*]
         )
     };
-
+    
+    ($ns:expr, $id:expr, $browse_ns:expr, $browse_name:expr, $display_name:expr ; [] $children:expr) => {
+        Node::object(
+            NodeId::new($ns, $id),
+            QualifiedName::new($browse_ns, $browse_name),
+            $display_name.into(),
+            $children
+        )
+    };
+ 
     // Shorthand version where browse_ns equals ns with children
     ($ns:expr, $id:expr, $browse_name:expr, $display_name:expr ; $($child:expr),* $(,)?) => {
         object!($ns, $id, $ns, $browse_name, $display_name ; $($child),*)
     };
-
+    ($ns:expr, $id:expr, $browse_name:expr, $display_name:expr ; [] $children:expr) => {
+        object!($ns, $id, $ns, $browse_name, $display_name ; [] $children)
+    };
+ 
     // Object without children
     ($ns:expr, $id:expr, $browse_ns:expr, $browse_name:expr, $display_name:expr) => {
         Node::object(
@@ -77,7 +89,7 @@ macro_rules! variable {
             $value,
         )
     };
-
+   
     // Shorthand version where browse_ns equals ns
     ($ns:expr, $id:expr, $browse_name:expr, $display_name:expr, $data_type:expr, $value_rank:expr, $value:expr) => {
         variable!(
@@ -91,4 +103,20 @@ macro_rules! variable {
             $value
         )
     };
+    
+    ([] $ns:expr, $id:expr, $browse_name:expr, $display_name:expr, $data_type:expr, $value_rank:expr, $value:expr ; $($child:expr),* $(,)?) => {
+    
+        Node::variable_with(
+            NodeId::new($ns, $id),
+            QualifiedName::new($ns, $browse_name),
+            $display_name.into(),
+            $data_type,
+            $value_rank, 
+            $value,
+            vec![$($child),*]
+        )
+   
+    };
+
+  
 }

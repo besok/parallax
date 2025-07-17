@@ -21,6 +21,51 @@ pub type NamespaceUri = String;
 pub struct Namespace(pub NamespaceIndex, pub NamespaceUri);
 
 #[derive(Debug, Clone)]
+pub struct IdGenerator {
+    nesting: Vec<String>,
+}
+
+impl IdGenerator {
+    pub fn new() -> Self {
+        Self {
+            nesting: Vec::new(),
+        }
+    }
+    pub fn push<T: Into<String>>(&mut self, node: T) {
+        self.nesting.push(node.into());
+    }
+    pub fn push_dot<T: Into<String>>(&mut self, node: T) -> String {
+        self.push(node);
+        self.dot()
+    }
+    
+    pub fn last(&self) -> String {
+        self.nesting.last().cloned().unwrap_or_default()
+    }
+    pub fn pop(&mut self) -> Option<String> {
+        self.nesting.pop()
+    }
+    pub fn pop_dot(&mut self) -> String {
+        self.pop();
+        self.dot()
+    }
+
+
+    pub fn replace_dot<T:Into<String>>(&mut self, node: T) -> String {
+        self.pop();
+        self.push(node);
+        self.dot()
+    }
+    
+    pub fn dot(&self) -> String {
+        self.nesting.join(".")
+    }
+    pub fn dot_with<T: Into<String>>(&self, id: T) -> String {
+        format!("{}.{}", self.dot(), id.into())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Node {
     pub node_id: NodeId,
     pub browse_name: QualifiedName,
@@ -182,6 +227,28 @@ impl Node {
                 value_rank,
             },
             children: Vec::new(),
+        }
+    }
+
+    pub fn variable_with(
+        node_id: NodeId,
+        browse_name: QualifiedName,
+        display_name: LocalizedText,
+        data_type: DataTypeId,
+        value_rank: i32,
+        value: Variant,
+        children: Vec<Node>,
+    ) -> Self {
+        Node {
+            node_id,
+            browse_name,
+            display_name,
+            delegate: NodeDelegate::Variable {
+                value,
+                data_type,
+                value_rank,
+            },
+            children,
         }
     }
 

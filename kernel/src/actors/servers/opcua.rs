@@ -3,7 +3,7 @@ mod macros;
 
 use crate::actors::Actor;
 use crate::actors::servers::ServerError;
-use crate::actors::servers::opcua::data::ServerStructure;
+use crate::actors::servers::opcua::data::{Node, ServerStructure};
 use crate::{Res, VoidRes};
 use opcua::crypto::SecurityPolicy;
 use opcua::server::builder::ServerBuilder;
@@ -11,7 +11,7 @@ use opcua::server::config::ServerUserToken;
 use opcua::server::prelude::{AddressSpace, Config, Server, ServerConfig, ServerEndpoint};
 use opcua::server::server::Server as InnerServer;
 use opcua::sync::RwLock;
-use opcua::types::{DateTime, MessageSecurityMode, NodeId, Variant};
+use opcua::types::{DataTypeId, DateTime, MessageSecurityMode, NodeId, Variant};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
