@@ -1,3 +1,4 @@
+use bevy::prelude::Component;
 use crate::error::KernelError;
 use crate::{Res, VoidRes};
 use tokio::sync::mpsc;
@@ -6,7 +7,9 @@ use tokio::task;
 
 pub mod servers;
 pub mod workers;
+pub mod tags;
 
+#[derive(Component)]
 pub struct ActorHandle<Mes> {
     sender: Sender<Mes>,
 }

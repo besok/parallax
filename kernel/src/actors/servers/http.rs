@@ -8,6 +8,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use std::net::SocketAddr;
 use std::time::Duration;
+use bevy::prelude::Component;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;

@@ -1,4 +1,3 @@
-use bevy::prelude::Component;
 pub use opcua::*;
 pub mod actors;
 pub mod error;
