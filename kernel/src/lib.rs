@@ -3,6 +3,7 @@ pub mod actors;
 pub mod error;
 pub mod gauges;
 pub mod vis2d;
+pub mod ecs;
 
 pub fn init_logger() {
     use chrono::Local;

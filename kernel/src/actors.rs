@@ -1,4 +1,4 @@
-use bevy::prelude::Component;
+use bevy::prelude::{Bundle, Component};
 use crate::error::KernelError;
 use crate::{Res, VoidRes};
 use tokio::sync::mpsc;
@@ -83,6 +83,7 @@ where
 {
     spawn_actor_with(actor, None).await
 }
+
 
 mod tests {
     use crate::actors::servers::ServerError;
