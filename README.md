@@ -9,6 +9,8 @@ and benchmark a Factory Systems.
 It aims to replicate the entire factory terra, including the MES, FES systems, and all machinery—allowing for
 robust testing in isolation without needing physical hardware or cloud dependencies.
 
+The project is on the very early stages of development.
+
 ## The Problem
 
 Testing a distributed Factory systems is inherently difficult.
