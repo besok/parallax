@@ -69,6 +69,10 @@ impl<H> Actor<AzureMessage> for AzureTopicListener<H>
 where
     H: ServiceBusMsgHandler + Clone + Send + Sync + 'static,
 {
+    fn id(&self) -> String {
+        format!("{}_{}", self.topic, self.subscription)
+    }
+
     // we have to use the python sdk since the Rust SDK does not support the emulator
     async fn start(&mut self) -> VoidRes {
         log::info!("Starting Azure Client  {}", self.id());

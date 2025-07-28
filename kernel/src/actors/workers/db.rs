@@ -10,13 +10,15 @@ use std::time::Duration;
 
 #[derive(Clone)]
 pub struct DbWorker<DB: Database, H: DbTaskHandler<DB>> {
+    id: String,
     periodic_worker: PeriodicWorker<PeriodicTaskHandler<H, DB>>,
     pool: sqlx::Pool<DB>,
 }
 
 impl<DB: Database, H: DbTaskHandler<DB>> DbWorker<DB, H> {
-    pub fn new(task_handler: H, duration: Duration, pool: sqlx::Pool<DB>) -> Self {
+    pub fn new(id: String, task_handler: H, duration: Duration, pool: sqlx::Pool<DB>) -> Self {
         Self {
+            id,
             periodic_worker: PeriodicWorker::new(
                 PeriodicTaskHandler::new(task_handler, pool.clone()),
                 duration,
@@ -69,6 +71,10 @@ impl<H> Actor<DbMessage> for DbWorker<Sqlite, H>
 where
     H: DbTaskHandler<Sqlite>,
 {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn start(&mut self) -> VoidRes {
         self.periodic_worker._start().await
     }

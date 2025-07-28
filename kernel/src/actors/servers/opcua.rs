@@ -37,10 +37,6 @@ impl OpcuaServer {
             server_handle: None,
         })
     }
-
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
 }
 fn try_to_build_server(id: &str, config: &PathBuf) -> Res<InnerServer> {
     Ok(ServerConfig::load(config)
@@ -50,6 +46,10 @@ fn try_to_build_server(id: &str, config: &PathBuf) -> Res<InnerServer> {
         })?)
 }
 impl Actor<OpcuaMessage> for OpcuaServer {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn start(&mut self) -> VoidRes {
         log::info!("Starting OPC UA server {}", self.id(),);
 

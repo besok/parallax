@@ -50,13 +50,13 @@ impl SshServer {
             cmd_handler: cmd_processors.into(),
         }
     }
-
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
 }
 
 impl Actor<SshMessage> for SshServer {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn start(&mut self) -> VoidRes {
         let mut config = Config::default();
         config.keys.push(KeyPair::generate_ed25519().unwrap());

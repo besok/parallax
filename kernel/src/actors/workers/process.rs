@@ -36,6 +36,10 @@ pub enum ProcessWorkerMessage {
 }
 
 impl Actor<ProcessWorkerMessage> for ProcessWorker {
+    fn id(&self) -> String {
+        self.name.clone()
+    }
+
     async fn start(&mut self) -> VoidRes {
         let (abort_tx, mut abort_rx) = tokio::sync::oneshot::channel();
         self.child_abort = Some(abort_tx);

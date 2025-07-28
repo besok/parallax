@@ -48,6 +48,10 @@ impl StateFullHttpServer {
 }
 
 impl Actor<HttpMessageExtra> for StateFullHttpServer {
+    fn id(&self) -> String {
+        self.inner.id.clone()
+    }
+
     async fn start(&mut self) -> VoidRes {
         self.inner.start().await
     }

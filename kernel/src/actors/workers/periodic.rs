@@ -98,6 +98,10 @@ mod tests {
     }
 
     impl Actor<EchoMessage> for EchoPeriodicWorker {
+        fn id(&self) -> String {
+            "EchoPeriodicWorker".to_string()
+        }
+
         async fn start(&mut self) -> VoidRes {
             self.delegate._start().await
         }

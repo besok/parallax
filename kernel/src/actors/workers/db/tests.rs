@@ -52,7 +52,12 @@ async fn sqlite_smoke() -> VoidRes {
         .await?;
 
     let handle = spawn_actor_with(
-        DbWorker::new(DataQuery, Duration::from_secs(1), pool.clone()),
+        DbWorker::new(
+            "DbWorker".to_string(),
+            DataQuery,
+            Duration::from_secs(1),
+            pool.clone(),
+        ),
         None,
     )
     .await?;
