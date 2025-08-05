@@ -1,4 +1,5 @@
 use crate::actors::servers::ServerError;
+use bevy::ecs::query::QuerySingleError;
 use std::net::AddrParseError;
 use std::sync::PoisonError;
 use tokio::sync::mpsc;
@@ -10,6 +11,12 @@ pub enum KernelError {
     ServerError(ServerError),
     ChannelError(String),
     SystemError(String),
+}
+
+impl From<QuerySingleError> for KernelError {
+    fn from(value: QuerySingleError) -> Self {
+        KernelError::SystemError(value.to_string())
+    }
 }
 
 impl From<azure_core::Error> for KernelError {

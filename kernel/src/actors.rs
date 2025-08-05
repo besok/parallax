@@ -1,140 +1,88 @@
 use crate::error::KernelError;
 use crate::{Res, VoidRes};
-use bevy::prelude::{Bundle, Commands, Component, Entity, Name};
-use bevy::tasks::{IoTaskPool, Task};
+use bevy::ecs::system::{FunctionSystem, SystemParam};
+use bevy::prelude::*;
+use bevy::tasks::{ComputeTaskPool, IoTaskPool, Task};
+use std::future::Future;
+use std::marker::PhantomData;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::task;
+use tokio::sync::mpsc::Sender;
 
 pub mod servers;
 pub mod tags;
 pub mod workers;
 
+/// A handle for sending messages TO an actor. This is the "remote control".
+/// It's a lightweight component safe to query from any system.
 #[derive(Component)]
-pub struct ActorHandle<Mes> {
-    to_actor: Sender<Mes>,
-    from_actor: Receiver<Mes>,
-    entity: Entity,
-}
+pub struct ActorHandle<M>(Sender<M>);
 
-impl<Mes> ActorHandle<Mes> {
-    pub fn new(entity: Entity, sender: Sender<Mes>, receiver: Receiver<Mes>) -> Self {
-        ActorHandle {
-            to_actor: sender,
-            from_actor: receiver,
-            entity,
-        }
+impl<M: Send> ActorHandle<M> {
+    /// Asynchronously sends a message to the actor.
+    pub async fn send(&self, message: M) -> Result<(), mpsc::error::SendError<M>> {
+        self.0.send(message).await
     }
 
-    pub async fn send(&self, message: Mes) -> VoidRes {
-        Ok(self.to_actor.send(message).await?)
-    }
-
-    pub fn send_sync(&self, message: Mes) -> VoidRes {
-        let sender = self.to_actor.clone();
-        task::block_in_place(move || {
-            sender
-                .blocking_send(message)
-                .map_err(|e| KernelError::ChannelError(e.to_string()))
-        })
+    /// Tries to send a message synchronously from a non-async context.
+    pub fn try_send(&self, message: M) -> Result<(), mpsc::error::TrySendError<M>> {
+        self.0.try_send(message)
     }
 }
+#[derive(Component)]
+pub struct ActorReceiver<M>(pub mpsc::Receiver<M>);
 
-pub trait ActorMessage {
-    fn error(error: KernelError, actor_id: String) -> Self;
+#[derive(Component)]
+struct ActorTask(Task<()>);
+
+pub trait ActorMessage: Send + 'static {
+    fn error(error: KernelError) -> Self;
 }
 
-pub trait Actor<Mes: ActorMessage> {
+pub trait Actor<To: ActorMessage, From: ActorMessage = To> {
     fn id(&self) -> String;
     fn start(&mut self) -> impl Future<Output = VoidRes> + Send;
     fn stop(&mut self) -> impl Future<Output = VoidRes> + Send;
     fn process(
         &mut self,
-        message: Mes,
-        sender: Sender<Mes>,
+        message: To,
+        sender: Sender<From>,
     ) -> impl Future<Output = VoidRes> + Send;
 }
-#[derive(Component)]
-struct ActorTask(Task<()>);
-pub async fn spawn_actor<M, A>(
-    mut actor: A,
-    commands: &mut Commands<'_, '_>,
-    task_pool: &IoTaskPool,
-) -> Entity
+
+pub fn spawn_actor<To, From, A>(mut actor: A, mut commands: Commands) -> Entity
 where
-    A: Actor<M> + Send + 'static,
-    M: ActorMessage + Send + 'static,
+    A: Actor<To, From> + Send + 'static,
+    To: ActorMessage,
+    From: ActorMessage,
 {
-    let (to_actor_tx, mut to_actor_rx) = mpsc::channel::<M>(32);
-    let (from_actor_tx, from_actor_rx) = mpsc::channel::<M>(32);
+    let (to_actor_tx, mut to_actor_rx) = mpsc::channel::<To>(32);
+    let (from_actor_tx, from_actor_rx) = mpsc::channel::<From>(32);
 
     let actor_id = actor.id();
-
+    let task_pool = IoTaskPool::get();
     let task = task_pool.spawn(async move {
         if let Err(e) = actor.start().await {
-            let _ = from_actor_tx.send(M::error(e, actor.id())).await;
+            let _ = from_actor_tx.send(From::error(e)).await;
             return;
         }
 
         while let Some(message) = to_actor_rx.recv().await {
             if let Err(e) = actor.process(message, from_actor_tx.clone()).await {
-                let _ = from_actor_tx.send(M::error(e, actor.id())).await;
+                let _ = from_actor_tx.send(From::error(e)).await;
             }
         }
 
         if let Err(e) = actor.stop().await {
-            let _ = from_actor_tx.send(M::error(e, actor.id())).await;
+            let _ = from_actor_tx.send(From::error(e)).await;
         }
     });
 
-    let entity = commands.spawn_empty().id();
-
-    let ah = ActorHandle::new(entity, to_actor_tx, from_actor_rx);
     commands
-        .get_entity(entity)
-        .unwrap()
-        .insert((
-            ah,
+        .spawn((
+            ActorHandle(to_actor_tx),
+            ActorReceiver(from_actor_rx),
             ActorTask(task),
-            Name::new(format!("Actor: {}", actor_id)),
+            Name::new(format!("Actor_{}", actor_id)),
         ))
         .id()
-}
-
-mod tests {
-    use crate::actors::servers::ServerError;
-    use crate::actors::servers::http::{BaseHttpServer, HttpMessage};
-    use crate::actors::spawn_actor;
-    use crate::{VoidRes, init_logger};
-    use serde_json::Value;
-    use std::time::Duration;
-    use tokio::time::sleep;
-
-    #[tokio::test]
-    async fn test_http_server() -> VoidRes {
-        init_logger();
-
-        let server_handle = spawn_actor(BaseHttpServer::default(), None).await?;
-
-        let client = reqwest::Client::new();
-        let response = client
-            .get("http://127.0.0.1:8080/health")
-            .send()
-            .await
-            .map_err(|e| ServerError::ClientError(e.to_string()))?;
-
-        assert_eq!(response.status(), 200);
-
-        let body: Value = response
-            .json()
-            .await
-            .map_err(|e| ServerError::ClientError(e.to_string()))?;
-        assert_eq!(body["status"], "up");
-
-        server_handle.to_actor.send(HttpMessage::Stop).await?;
-
-        sleep(Duration::from_millis(100)).await;
-
-        Ok(())
-    }
 }

@@ -1,15 +1,6 @@
-[package]
-name = "parallax"
-version = "0.1.0"
-edition = "2024"
-description = "Industrial Digital Twin & Virtual Commissioning Framework"
-license = "Apache-2.0"
-repository = "https://github.com/besok/parallax.git"
-homepage = "https://github.com/besok/parallax.git"
-documentation = "https://docs.rs/parallax"
-keywords = ["digital-twin", "simulation", "IoT", "rust", "data-analytics"]
-categories = ["simulation", "data-structures", "network-programming"]
-readme = "README.md"
+[workspace]
+members = [
+    "kernel",
+]
 
-[dependencies]
-bevy = { version = "0.16.0", features = ["dynamic_linking"] }
+resolver = "2"

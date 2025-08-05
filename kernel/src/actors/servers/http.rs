@@ -2,8 +2,9 @@
 mod tests;
 
 use crate::VoidRes;
-use crate::actors::Actor;
 use crate::actors::servers::ServerError;
+use crate::actors::{Actor, ActorMessage};
+use crate::error::KernelError;
 use axum::routing::get;
 use axum::{Json, Router};
 use bevy::prelude::Component;
@@ -109,7 +110,7 @@ impl Actor<HttpMessage> for BaseHttpServer {
         Ok(())
     }
 
-    async fn process(&mut self, message: HttpMessage) -> VoidRes {
+    async fn process(&mut self, message: HttpMessage, sender: Sender<HttpMessage>) -> VoidRes {
         log::info!("Processing message: {:?}", message);
         match message {
             HttpMessage::Start => {
@@ -120,6 +121,9 @@ impl Actor<HttpMessage> for BaseHttpServer {
                 log::info!("Http Server [id={}] received stop message", self.id);
                 self.stop().await?;
             }
+            HttpMessage::Error(e) => {
+                log::error!("Http Server [id={}] received error message: {e:?}", self.id,);
+            }
         }
         Ok(())
     }
@@ -129,4 +133,11 @@ impl Actor<HttpMessage> for BaseHttpServer {
 pub enum HttpMessage {
     Start,
     Stop,
+    Error(KernelError),
+}
+
+impl ActorMessage for HttpMessage {
+    fn error(error: KernelError) -> Self {
+        HttpMessage::Error(error)
+    }
 }

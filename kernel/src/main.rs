@@ -12,7 +12,6 @@ fn main() {
         Pos2d::green_with_label(3, 3, "Cutting Center"),
         Pos2d::green(4, 3),
     ]);
-
     app.insert_resource(pos_elems)
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup_floor);
