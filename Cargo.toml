@@ -1,6 +1,21 @@
 [workspace]
 members = [
     "kernel",
+    "actor",
+    "http-actor",
+    "utils",
+    "ssh-actor"
 ]
 
 resolver = "2"
+
+[workspace.dependencies]
+actor = { path = "actor" }
+utils = { path = "utils" }
+actix = "0.13.5"
+actix-web = "4.4"
+tokio = "1.0"
+log = "0.4"
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+env_logger = "0.11.8"

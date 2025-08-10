@@ -1,0 +1,16 @@
+[package]
+name = "ssh-actor"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+
+[dependencies]
+russh = "0.40.2"
+russh-keys = "0.40.1"
+async-trait = "0.1.88"
+actor = { workspace = true }
+utils = { workspace = true }
+log = { workspace = true }
+actix = { workspace = true }
+tokio = { workspace = true }

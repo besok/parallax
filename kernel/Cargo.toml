@@ -1,5 +1,5 @@
 [package]
-name = "parallax-kernel"
+name = "kernel"
 version = "0.1.0"
 edition = "2024"
 description = "Industrial Digital Twin & Virtual Commissioning Framework"
@@ -10,17 +10,15 @@ documentation = "https://docs.rs/parallax"
 keywords = ["digital-twin", "simulation", "IoT", "rust", "data-analytics"]
 categories = ["simulation", "data-structures", "network-programming"]
 readme = "README.md"
-
+publish = false
 
 [dependencies]
-bevy = { version = "0.16.0" }
 axum = "0.6"
-tokio = { version = "1.0", features = ["full"] }
-
+tokio = "1.47.1"
 log = "0.4"
 env_logger = "0.10"
 serde_json = "1.0.140"
-reqwest = { version = "0.12.15", features = ["json"] }
+reqwest = { version = "0.12.15", features = ["json", "blocking"] }
 chrono = "0.4"
 russh = "0.40.2"
 russh-keys = "0.40.1"
@@ -32,31 +30,3 @@ azure_messaging_servicebus = "0.21.0"
 azure_core = "0.21.0"
 base64 = "0.22.0"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "chrono"] }
-
-
-# Enable a small amount of optimization in the dev profile.
-[profile.dev]
-opt-level = 1
-
-# Enable a large amount of optimization in the dev profile for dependencies.
-[profile.dev.package."*"]
-opt-level = 3
-
-# Enable more optimization in the release profile at the cost of compile time.
-[profile.release]
-# Compile the entire crate as one unit.
-# Slows compile times, marginal improvements.
-codegen-units = 1
-# Do a second optimization pass over the entire program, including dependencies.
-# Slows compile times, marginal improvements.
-lto = "thin"
-
-# Optimize for size in the wasm-release profile to reduce load times and bandwidth usage on web.
-[profile.wasm-release]
-# Default to release profile values.
-inherits = "release"
-# Optimize with size in mind (also try "z", sometimes it is better).
-# Slightly slows compile times, great improvements to file size and runtime performance.
-opt-level = "s"
-# Strip all debugging information from the binary to slightly reduce file size.
-strip = "debuginfo"

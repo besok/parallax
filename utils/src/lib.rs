@@ -1,9 +1,4 @@
-pub use opcua::*;
-pub mod actors;
-pub mod error;
-pub mod gauges;
-
-pub fn init_logger() {
+pub fn logger_on() {
     use chrono::Local;
     use env_logger::{Builder, Env};
     use std::io::Write;
@@ -27,5 +22,3 @@ pub fn init_logger() {
         })
         .init();
 }
-// pub type Res<T> = Result<T, error::KernelError>;
-// pub type VoidRes = Res<()>;

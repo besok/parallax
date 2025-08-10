@@ -1,10 +1,11 @@
-use crate::{Res, VoidRes};
-use std::io;
+use crate::{CmdProcessor, OsFiles};
+use std::fmt::{Display, Formatter};
 
-use crate::actors::servers::ServerError;
+use crate::error::SshError;
+use actor::{ActorError, ActorResult, ActorResultVoid};
 use async_trait::async_trait;
 use russh::server::{Auth, Msg, Session};
-use russh::{Channel, ChannelId, server};
+use russh::{Channel, ChannelId, Error, server};
 use russh_keys::key::PublicKey;
 use std::sync::{Arc, Mutex};
 
@@ -28,7 +29,7 @@ impl Default for BaseSshHandler {
 }
 
 impl BaseSshHandler {
-    pub fn add_processor(&mut self, processor: CmdProcessor) -> VoidRes {
+    pub fn add_processor(&mut self, processor: CmdProcessor) -> Result<(), SshError> {
         let mut guard = self.processors.lock()?;
         guard.insert(0, processor);
         Ok(())
@@ -38,7 +39,7 @@ impl BaseSshHandler {
             processors: Arc::new(Mutex::new(processors)),
         }
     }
-    fn handle_command(&self, cmd: &str, files: OsFiles) -> Res<(String, OsFiles)> {
+    fn handle_command(&self, cmd: &str, files: OsFiles) -> Result<(String, OsFiles), SshError> {
         for processor in self.processors.lock()?.iter() {
             if let Some(res) = processor(cmd, files.clone()) {
                 return res;
@@ -108,7 +109,7 @@ impl SshHandler {
 
 #[async_trait]
 impl server::Handler for SshHandler {
-    type Error = ServerError;
+    type Error = SshError;
 
     async fn auth_password(self, user: &str, password: &str) -> Result<(Self, Auth), Self::Error> {
         Ok((self, Auth::Accept))
