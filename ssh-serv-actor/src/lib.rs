@@ -1,5 +1,6 @@
 pub mod error;
 pub mod handler;
+#[cfg(test)]
 mod tests;
 
 use crate::error::{SshError, SshResult, SshResultVoid};

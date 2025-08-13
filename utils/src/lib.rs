@@ -1,3 +1,5 @@
+pub mod gauges;
+
 pub fn logger_on() {
     use chrono::Local;
     use env_logger::{Builder, Env};

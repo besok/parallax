@@ -29,4 +29,4 @@ opcua = { version = "0.12", features = ["client", "server"] }
 azure_messaging_servicebus = "0.21.0"
 azure_core = "0.21.0"
 base64 = "0.22.0"
-sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "mysql", "sqlite", "chrono"] }
+

@@ -1,7 +1,7 @@
-use crate::{SshServer, SshFileOperation, AddProcessor};
 use crate::error::{SshResult, SshResultVoid};
-use actor::{ActorResultVoid, ActorServiceMessage};
+use crate::{AddProcessor, SshFileOperation, SshServer};
 use actix::Actor;
+use actor::{ActorResultVoid, ActorServiceMessage};
 use russh::{ChannelMsg, client};
 use russh_keys::key::PublicKey;
 use std::sync::Arc;
@@ -66,14 +66,17 @@ impl client::Handler for TestSshClient {
 async fn smoke_ssh() -> ActorResultVoid {
     logger_on();
     let server_handle = SshServer::default().start();
-    
+
     // Start the SSH server
-    server_handle.send(ActorServiceMessage::Start).await.unwrap()?;
+    server_handle
+        .send(ActorServiceMessage::Start)
+        .await
+        .unwrap()?;
     sleep(Duration::from_millis(100)).await;
 
     let client = TestSshClient;
 
-    assert_eq!("No files found\n", client.call("ls").await.unwrap());
+    assert_eq!("No files found\n", client.call("ls").await?);
 
     // Add files using new message structure
     server_handle
@@ -81,13 +84,15 @@ async fn smoke_ssh() -> ActorResultVoid {
             "C:\\Users\\besok\\Documents\\test1".to_string(),
             b"test".to_vec(),
         ))
-        .await.unwrap()?;
+        .await
+        .unwrap()?;
     server_handle
         .send(SshFileOperation::Add(
             "C:\\Users\\besok\\Documents\\test2".to_string(),
             b"test".to_vec(),
         ))
-        .await.unwrap()?;
+        .await
+        .unwrap()?;
 
     assert_eq!(
         "C:\\Users\\besok\\Documents\\test1\nC:\\Users\\besok\\Documents\\test2\n",
@@ -99,16 +104,17 @@ async fn smoke_ssh() -> ActorResultVoid {
         .send(SshFileOperation::Remove(
             "C:\\Users\\besok\\Documents\\test1".to_string(),
         ))
-        .await.unwrap()?;
+        .await
+        .unwrap()?;
 
     assert_eq!(
         "C:\\Users\\besok\\Documents\\test2\n",
-        client.call("ls").await.unwrap()
+        client.call("ls").await?
     );
 
     assert_eq!(
         "It is an Ssh test server!\n",
-        client.call("ssh_test_server").await.unwrap()
+        client.call("ssh_test_server").await?
     );
 
     // Add processor using new message structure
@@ -120,15 +126,19 @@ async fn smoke_ssh() -> ActorResultVoid {
                 None
             }
         })))
-        .await.unwrap()?;
+        .await
+        .unwrap()?;
 
     assert_eq!(
         "It is a new Ssh test server!\n",
-        client.call("ssh_test_server").await.unwrap()
+        client.call("ssh_test_server").await?
     );
 
     // Stop the SSH server
-    server_handle.send(ActorServiceMessage::Stop).await.unwrap()?;
+    server_handle
+        .send(ActorServiceMessage::Stop)
+        .await
+        .unwrap()?;
     sleep(Duration::from_millis(100)).await;
     Ok(())
 }

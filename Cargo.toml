@@ -2,12 +2,12 @@
 members = [
     "kernel",
     "actor",
-    "http-actor",
+    "http-serv-actor",
+    "ssh-serv-actor",
     "utils",
-    "ssh-actor"
+    "db-actor",
 ]
 
-resolver = "2"
 
 [workspace.dependencies]
 actor = { path = "actor" }

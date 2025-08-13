@@ -1,7 +1,6 @@
 pub use opcua::*;
 pub mod actors;
 pub mod error;
-pub mod gauges;
 
 pub fn init_logger() {
     use chrono::Local;

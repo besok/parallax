@@ -100,7 +100,7 @@ async fn ping_handler() -> ActixResult<HttpResponse> {
 async fn health_handler() -> ActixResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "status": "up",
-        "service": "http-actor",
+        "service": "http-serv-actor",
         "timestamp": chrono::Utc::now().to_rfc3339()
     })))
 }
