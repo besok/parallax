@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "kernel",
     "actor",
     "http-serv-actor",
     "ssh-serv-actor",
     "utils",
     "db-actor",
+    "process-actor", "opcua-serv-actor", "azure-actor",
 ]
 
 
@@ -14,7 +14,7 @@ actor = { path = "actor" }
 utils = { path = "utils" }
 actix = "0.13.5"
 actix-web = "4.4"
-tokio = "1.0"
+tokio = { version = "1.47.1", features = ["process", "macros", "io-util"] }
 log = "0.4"
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }

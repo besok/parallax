@@ -1,5 +1,5 @@
 use crate::error::SqlResult;
-use crate::sqlite::SqLiteQueryWorker;
+use crate::sqlite::SqLiteQueryActor;
 use actix::{Actor, AsyncContext, Context, Handler, Message, WrapFuture};
 use sqlx::sqlite::SqliteRow;
 use sqlx::types::chrono;
@@ -69,7 +69,7 @@ async fn sqlite_smoke() -> SqlResult<()> {
         .execute(&pool)
         .await?;
 
-    let mut actor: SqLiteQueryWorker<DataQueryResult, _> = SqLiteQueryWorker::new(
+    let mut actor: SqLiteQueryActor<DataQueryResult, _> = SqLiteQueryActor::new(
         "TaskQuerySqliteWorker".to_string(),
         || sqlx::query("SELECT * FROM tasks"),
         Duration::from_secs(1),

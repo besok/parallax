@@ -6,7 +6,7 @@ use sqlx::{Database, Error, Executor, Sqlite};
 use std::ops::Index;
 use std::time::Duration;
 #[derive(Clone)]
-pub struct SqLiteQueryWorker<T, Q>
+pub struct SqLiteQueryActor<T, Q>
 where
     Q: Fn() -> Query<'static, Sqlite, <Sqlite as Database>::Arguments<'static>>,
     T: actix::Message + Send + Clone + Unpin + 'static,
@@ -20,7 +20,7 @@ where
     _t: std::marker::PhantomData<T>,
 }
 
-impl<Q, T> SqLiteQueryWorker<T, Q>
+impl<Q, T> SqLiteQueryActor<T, Q>
 where
     Q: Fn() -> Query<'static, Sqlite, <Sqlite as Database>::Arguments<'static>>,
     T: actix::Message + Send + Clone + Unpin + 'static,
@@ -41,7 +41,7 @@ where
         self.subscribers.push(recipient);
     }
 }
-impl<Q, T> Handler<ActorServiceMessage> for SqLiteQueryWorker<T, Q>
+impl<Q, T> Handler<ActorServiceMessage> for SqLiteQueryActor<T, Q>
 where
     Q: Fn() -> Query<'static, Sqlite, <Sqlite as Database>::Arguments<'static>> + Unpin + 'static,
     T: From<Vec<SqliteRow>> + actix::Message + Send + Clone + Unpin + 'static,
@@ -63,7 +63,7 @@ where
     }
 }
 
-impl<Q, T> Actor for SqLiteQueryWorker<T, Q>
+impl<Q, T> Actor for SqLiteQueryActor<T, Q>
 where
     Q: Fn() -> Query<'static, Sqlite, <Sqlite as Database>::Arguments<'static>> + Unpin + 'static,
     T: From<Vec<SqliteRow>> + actix::Message + Send + Clone + Unpin + 'static,

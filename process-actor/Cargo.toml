@@ -1,0 +1,12 @@
+[package]
+name = "process-actor"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+actix = { workspace = true }
+actor = { workspace = true }
+tokio = { workspace = true }
+log = { workspace = true }
+utils = { workspace = true }

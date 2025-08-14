@@ -1,0 +1,11 @@
+[package]
+name = "azure-actor"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+actor = { workspace = true }
+utils = { workspace = true }
+actix = { workspace = true }
+log = { workspace = true }
