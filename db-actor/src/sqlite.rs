@@ -17,7 +17,6 @@ where
     duration: Duration,
     query: Q,
     subscribers: Vec<Recipient<T>>,
-    _t: std::marker::PhantomData<T>,
 }
 
 impl<Q, T> SqLiteQueryActor<T, Q>
@@ -32,7 +31,6 @@ where
             pool,
             duration,
             query,
-            _t: std::marker::PhantomData,
             subscribers: vec![],
         }
     }

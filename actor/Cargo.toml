@@ -7,3 +7,4 @@ publish = false
 
 [dependencies]
 actix = { workspace = true }
+log = "0.4.27"

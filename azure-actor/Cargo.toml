@@ -9,3 +9,7 @@ actor = { workspace = true }
 utils = { workspace = true }
 actix = { workspace = true }
 log = { workspace = true }
+tokio = { workspace = true }
+fe2o3-amqp = "0.14.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.142"
