@@ -196,7 +196,6 @@ where
             }
             ActorServiceMessage::Stop => {
                 log::info!("[{}] Stop message received", self.key);
-                // Just stop the actor, cleanup will happen in stopping()
                 ctx.stop();
             }
         }
